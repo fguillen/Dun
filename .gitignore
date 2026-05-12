@@ -58,3 +58,7 @@ yarn-debug.log*
 
 # Claude Code local settings.
 .claude/settings.local.json
+
+# Ignore key files for decrypting credentials and more.
+/config/*.key
+
