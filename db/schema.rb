@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_13_083514) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_13_101125) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -48,6 +48,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_083514) do
     t.datetime "updated_at", null: false
     t.index ["owner_type", "email"], name: "index_magic_links_on_owner_type_and_email"
     t.index ["token_digest"], name: "index_magic_links_on_token_digest", unique: true
+  end
+
+  create_table "player_profiles", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.citext "handle"
+    t.bigint "player_id", null: false
+    t.string "real_name"
+    t.bigint "server_id", null: false
+    t.jsonb "stats", default: {}, null: false
+    t.datetime "updated_at", null: false
+    t.index ["player_id"], name: "index_player_profiles_on_player_id"
+    t.index ["server_id", "handle"], name: "index_player_profiles_on_server_id_and_handle", unique: true, where: "(handle IS NOT NULL)"
+    t.index ["server_id", "player_id"], name: "index_player_profiles_on_server_id_and_player_id", unique: true
+    t.index ["server_id"], name: "index_player_profiles_on_server_id"
   end
 
   create_table "players", force: :cascade do |t|
@@ -105,6 +119,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_083514) do
     t.index ["slug"], name: "index_servers_on_slug", unique: true
   end
 
+  add_foreign_key "player_profiles", "players"
+  add_foreign_key "player_profiles", "servers"
   add_foreign_key "server_accesses", "servers"
   add_foreign_key "server_adminships", "admins"
   add_foreign_key "server_adminships", "admins", column: "granted_by_admin_id"

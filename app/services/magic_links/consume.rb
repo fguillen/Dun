@@ -41,6 +41,7 @@ module MagicLinks
         next unless server.admits?(player.email)
 
         ServerMembership.find_or_create_by!(server: server, player: player)
+        PlayerProfile.find_or_create_by!(server: server, player: player)
       end
     end
   end

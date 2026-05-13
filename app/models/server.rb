@@ -6,6 +6,7 @@ class Server < ApplicationRecord
   has_many :server_accesses, dependent: :destroy
   has_many :server_memberships, dependent: :destroy
   has_many :players, through: :server_memberships
+  has_many :player_profiles, dependent: :destroy
 
   normalizes :slug, with: ->(slug) { slug.to_s.strip.downcase }
 

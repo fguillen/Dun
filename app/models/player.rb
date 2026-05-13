@@ -3,6 +3,7 @@ class Player < ApplicationRecord
   has_many :magic_links, as: :owner, dependent: :nullify
   has_many :server_memberships, dependent: :destroy
   has_many :servers, through: :server_memberships
+  has_many :player_profiles, dependent: :destroy
 
   normalizes :email, with: ->(email) { email.strip.downcase }
 

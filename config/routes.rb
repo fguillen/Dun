@@ -14,7 +14,12 @@ Rails.application.routes.draw do
 
     resources :servers, only: %i[index] do
       member do
-        post :join
+        post  :join
+        patch "me" => "servers/me#update"
+      end
+
+      scope module: :servers do
+        resources :players, only: %i[show], param: :handle
       end
     end
 
