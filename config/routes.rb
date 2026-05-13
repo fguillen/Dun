@@ -23,6 +23,17 @@ Rails.application.routes.draw do
       end
     end
 
+    resources :worlds, only: %i[show] do
+      member { post :join }
+      scope module: :worlds do
+        get  "map" => "map#index"
+        resources :regions, only: %i[show] do
+          get :adjacent, on: :member
+        end
+        resources :ruins, only: %i[index]
+      end
+    end
+
     namespace :admin do
       scope module: :auth do
         post   "auth/magic_link" => "magic_links#create",  as: :auth_magic_link
