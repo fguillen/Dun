@@ -36,10 +36,12 @@ module MagicLinks
       email.split("@").first.tr("._-", " ").split.map(&:capitalize).join(" ").presence || "Player"
     end
 
-    # Server admission is a no-op until Phase 1.2 introduces the Server family.
-    # When it lands, this method iterates servers whose ServerAccess admits this
-    # email and creates ServerMembership + PlayerProfile rows.
-    def admit_to_servers(_player)
+    def admit_to_servers(player)
+      Server.find_each do |server|
+        next unless server.admits?(player.email)
+
+        ServerMembership.find_or_create_by!(server: server, player: player)
+      end
     end
   end
 end
