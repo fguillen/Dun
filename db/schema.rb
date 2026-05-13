@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_13_074435) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_13_083514) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -57,4 +57,59 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_074435) do
     t.datetime "updated_at", null: false
     t.index ["email"], name: "index_players_on_email", unique: true
   end
+
+  create_table "server_accesses", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "kind", null: false
+    t.bigint "server_id", null: false
+    t.datetime "updated_at", null: false
+    t.citext "value", null: false
+    t.index ["server_id", "kind", "value"], name: "index_server_accesses_on_server_id_and_kind_and_value", unique: true
+    t.index ["server_id"], name: "index_server_accesses_on_server_id"
+  end
+
+  create_table "server_adminships", force: :cascade do |t|
+    t.bigint "admin_id", null: false
+    t.datetime "created_at", null: false
+    t.bigint "granted_by_admin_id"
+    t.datetime "joined_at", null: false
+    t.string "role", default: "admin", null: false
+    t.bigint "server_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["admin_id"], name: "index_server_adminships_on_admin_id"
+    t.index ["granted_by_admin_id"], name: "index_server_adminships_on_granted_by_admin_id"
+    t.index ["server_id", "admin_id"], name: "index_server_adminships_on_server_id_and_admin_id", unique: true
+    t.index ["server_id"], name: "index_server_adminships_on_server_id"
+  end
+
+  create_table "server_memberships", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "joined_at", null: false
+    t.bigint "player_id", null: false
+    t.bigint "server_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["player_id"], name: "index_server_memberships_on_player_id"
+    t.index ["server_id", "player_id"], name: "index_server_memberships_on_server_id_and_player_id", unique: true
+    t.index ["server_id"], name: "index_server_memberships_on_server_id"
+  end
+
+  create_table "servers", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "max_concurrent_worlds", default: 2, null: false
+    t.integer "max_worlds_per_account", default: 2, null: false
+    t.string "name", null: false
+    t.bigint "owner_admin_id", null: false
+    t.citext "slug", null: false
+    t.datetime "updated_at", null: false
+    t.index ["owner_admin_id"], name: "index_servers_on_owner_admin_id"
+    t.index ["slug"], name: "index_servers_on_slug", unique: true
+  end
+
+  add_foreign_key "server_accesses", "servers"
+  add_foreign_key "server_adminships", "admins"
+  add_foreign_key "server_adminships", "admins", column: "granted_by_admin_id"
+  add_foreign_key "server_adminships", "servers"
+  add_foreign_key "server_memberships", "players"
+  add_foreign_key "server_memberships", "servers"
+  add_foreign_key "servers", "admins", column: "owner_admin_id"
 end
