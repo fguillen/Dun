@@ -1,0 +1,8 @@
+<%= @scope == "admin" ? "dun admin sign-in" : "dun sign-in" %>
+
+Use this token to complete sign-in:
+
+  <%= @raw_token %>
+
+This token expires in 15 minutes and can only be used once. If you didn't
+request it, you can safely ignore this email.
