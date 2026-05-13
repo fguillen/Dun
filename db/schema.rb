@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_13_101125) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_13_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -119,6 +119,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_101125) do
     t.index ["slug"], name: "index_servers_on_slug", unique: true
   end
 
+  create_table "worlds", force: :cascade do |t|
+    t.datetime "archived_at"
+    t.integer "auto_cancel_after_hours", default: 168, null: false
+    t.datetime "cancelled_at"
+    t.datetime "created_at", null: false
+    t.datetime "grace_closes_at"
+    t.integer "min_players", null: false
+    t.string "name", null: false
+    t.string "seed", null: false
+    t.bigint "server_id", null: false
+    t.citext "slug", null: false
+    t.string "status", default: "proposed", null: false
+    t.datetime "t0_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "wonder_name"
+    t.index ["server_id", "slug"], name: "index_worlds_on_server_id_and_slug", unique: true
+    t.index ["server_id", "status"], name: "index_worlds_on_server_id_and_status"
+    t.index ["server_id"], name: "index_worlds_on_server_id"
+    t.index ["status", "t0_at"], name: "index_worlds_on_status_and_t0_at"
+  end
+
   add_foreign_key "player_profiles", "players"
   add_foreign_key "player_profiles", "servers"
   add_foreign_key "server_accesses", "servers"
@@ -128,4 +149,5 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_101125) do
   add_foreign_key "server_memberships", "players"
   add_foreign_key "server_memberships", "servers"
   add_foreign_key "servers", "admins", column: "owner_admin_id"
+  add_foreign_key "worlds", "servers"
 end

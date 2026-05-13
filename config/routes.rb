@@ -36,7 +36,12 @@ Rails.application.routes.draw do
           resources :admins,      only: %i[index create destroy]
           resources :invitations, only: %i[index create destroy]
           resources :members,     only: %i[index]
+          resources :worlds,      only: %i[index create]
         end
+      end
+
+      resources :worlds, only: %i[show update] do
+        member { post :cancel }
       end
     end
   end
