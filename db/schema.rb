@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_13_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_13_120001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -119,6 +119,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_120000) do
     t.index ["slug"], name: "index_servers_on_slug", unique: true
   end
 
+  create_table "world_invitations", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.citext "email", null: false
+    t.bigint "invited_by_admin_id", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "world_id", null: false
+    t.index ["invited_by_admin_id"], name: "index_world_invitations_on_invited_by_admin_id"
+    t.index ["world_id", "email"], name: "index_world_invitations_on_world_id_and_email", unique: true
+    t.index ["world_id"], name: "index_world_invitations_on_world_id"
+  end
+
   create_table "worlds", force: :cascade do |t|
     t.datetime "archived_at"
     t.integer "auto_cancel_after_hours", default: 168, null: false
@@ -149,5 +160,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_120000) do
   add_foreign_key "server_memberships", "players"
   add_foreign_key "server_memberships", "servers"
   add_foreign_key "servers", "admins", column: "owner_admin_id"
+  add_foreign_key "world_invitations", "admins", column: "invited_by_admin_id"
+  add_foreign_key "world_invitations", "worlds"
   add_foreign_key "worlds", "servers"
 end

@@ -4,6 +4,8 @@ class World < ApplicationRecord
 
   belongs_to :server
 
+  has_many :world_invitations, dependent: :destroy
+
   normalizes :slug, with: ->(slug) { slug.to_s.strip.downcase }
 
   validates :name, presence: true
