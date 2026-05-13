@@ -6,6 +6,7 @@ class PlayerProfile < ApplicationRecord
 
   belongs_to :server
   belongs_to :player
+  has_many :kingdoms, dependent: :destroy
 
   validates :player_id, uniqueness: { scope: :server_id }
   validates :handle,
@@ -15,11 +16,12 @@ class PlayerProfile < ApplicationRecord
   validate :handle_not_reserved
   validates :real_name, length: { in: REAL_NAME_LENGTH, allow_nil: true }
 
-  # Phase 2 will activate this: a profile is locked from handle changes while
-  # its kingdom is part of any active round (§17.1). Until then it returns
-  # false so the wiring is in place but the constraint is inert.
   def locked?
-    false
+    Kingdom
+      .where(player_profile_id: id)
+      .joins(:world)
+      .where(worlds: { status: %w[grace active] })
+      .exists?
   end
 
   private

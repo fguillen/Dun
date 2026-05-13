@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_13_120002) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_13_120003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -35,6 +35,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_120002) do
     t.datetime "updated_at", null: false
     t.index ["owner_type", "owner_id"], name: "index_api_keys_on_owner_type_and_owner_id"
     t.index ["token_digest"], name: "index_api_keys_on_token_digest", unique: true
+  end
+
+  create_table "kingdoms", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "eliminated_at"
+    t.bigint "home_region_id"
+    t.datetime "joined_at", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.bigint "player_profile_id", null: false
+    t.jsonb "stockpiles", default: {"gold" => 0, "iron" => 0, "wood" => 0, "stone" => 0}, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "world_id", null: false
+    t.index ["home_region_id"], name: "index_kingdoms_on_home_region_id"
+    t.index ["player_profile_id"], name: "index_kingdoms_on_player_profile_id"
+    t.index ["world_id", "player_profile_id"], name: "index_kingdoms_on_world_id_and_player_profile_id", unique: true
+    t.index ["world_id"], name: "index_kingdoms_on_world_id"
   end
 
   create_table "magic_links", force: :cascade do |t|
@@ -196,13 +212,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_120002) do
     t.string "status", default: "proposed", null: false
     t.datetime "t0_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "winner_kingdom_id"
     t.string "wonder_name"
     t.index ["server_id", "slug"], name: "index_worlds_on_server_id_and_slug", unique: true
     t.index ["server_id", "status"], name: "index_worlds_on_server_id_and_status"
     t.index ["server_id"], name: "index_worlds_on_server_id"
     t.index ["status", "t0_at"], name: "index_worlds_on_status_and_t0_at"
+    t.index ["winner_kingdom_id"], name: "index_worlds_on_winner_kingdom_id"
   end
 
+  add_foreign_key "kingdoms", "player_profiles"
+  add_foreign_key "kingdoms", "regions", column: "home_region_id"
+  add_foreign_key "kingdoms", "worlds"
   add_foreign_key "nodes", "regions"
   add_foreign_key "player_profiles", "players"
   add_foreign_key "player_profiles", "servers"
@@ -219,5 +240,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_120002) do
   add_foreign_key "servers", "admins", column: "owner_admin_id"
   add_foreign_key "world_invitations", "admins", column: "invited_by_admin_id"
   add_foreign_key "world_invitations", "worlds"
+  add_foreign_key "worlds", "kingdoms", column: "winner_kingdom_id"
   add_foreign_key "worlds", "servers"
 end

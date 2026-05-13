@@ -8,6 +8,8 @@ class World < ApplicationRecord
   has_many :regions, dependent: :destroy
   has_many :nodes, through: :regions
   has_many :ruins, through: :regions
+  has_many :kingdoms, dependent: :destroy
+  belongs_to :winner_kingdom, class_name: "Kingdom", optional: true
 
   normalizes :slug, with: ->(slug) { slug.to_s.strip.downcase }
 
