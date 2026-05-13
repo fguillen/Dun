@@ -2,7 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-`dun` is an API-only Rails 8 backend. The CLI client and any future integrations consume the JSON API exposed by this backend. Source of truth for game mechanics: [docs/dun Game Design Document.v3.md](docs/dun%20Game%20Design%20Document.v3.md). The implementation roadmap is [TODO.md](TODO.md).
+`dun` is an API-only Rails 8 backend for an async multiplayer medieval-fantasy strategy game designed for developers during workday micro-idle moments. The CLI client and any future integrations consume the JSON API exposed by this backend.
+
+- **Product overview**: [PRODUCT.md](PRODUCT.md) — what the game is, who it's for, core mechanics at a glance.
+- **Game mechanics source of truth**: [docs/dun Game Design Document.v3.md](docs/dun%20Game%20Design%20Document.v3.md). Section refs like `§17.1` point at that doc.
+- **HTTP API contract**: [docs/openapi.yaml](docs/openapi.yaml) — OpenAPI 3.1 spec covering everything implemented so far. The CLI gem and any future integration consume only this surface.
+- **Implementation roadmap**: [TODO.md](TODO.md). Phase 1 (Identity, Auth, Server Membership) is complete; Phase 2 (World Lifecycle & Map Generation) is next.
 
 ## Stack
 
@@ -42,7 +47,9 @@ All routes mount under `/v1/...`. The player surface is at the root of that name
 { "error": { "code": "string_code", "message": "human readable", "retry_after": 30 } }
 ```
 
-`retry_after` is included only on rate-limit (`429`) responses.
+`retry_after` is included only on rate-limit (`429`) responses. Every response also echoes `X-Request-Id` (auto-generated if absent), which appears in lograge JSON logs and OpenTelemetry traces.
+
+The full request/response surface is captured in [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.1). When adding or changing endpoints, update that file in the same commit.
 
 ### Base controllers
 
