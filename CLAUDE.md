@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Product overview**: [PRODUCT.md](PRODUCT.md) — what the game is, who it's for, core mechanics at a glance.
 - **Game mechanics source of truth**: [docs/dun Game Design Document.v3.md](docs/dun%20Game%20Design%20Document.v3.md). Section refs like `§17.1` point at that doc.
 - **HTTP API contract**: [docs/openapi.yaml](docs/openapi.yaml) — OpenAPI 3.1 spec covering everything implemented so far. The CLI gem and any future integration consume only this surface.
-- **Implementation roadmap**: [TODO.md](TODO.md). Phase 1 (Identity, Auth, Server Membership) is complete; Phase 2 (World Lifecycle & Map Generation) is next.
+- **Implementation roadmap**: [TODO.md](TODO.md). Phases 1 (Identity, Auth, Server Membership) and 2 (World Lifecycle & Map Generation) are complete; Phase 3 (Resources, Buildings & Build Queue) is next.
 
 ## Stack
 

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: dun HTTP API
-  version: "1.0.0-phase1"
+  version: "1.0.0-phase2"
   description: |
     JSON API for the `dun` backend. The CLI gem and any future integration
     consume only this surface.
@@ -68,6 +68,12 @@ tags:
     description: Manage invite-kind `ServerAccess` rows on a server.
   - name: Admin members
     description: Read-only listing of player memberships on a server.
+  - name: Player worlds
+    description: Player-facing world listing, join, and map/region/ruin reads.
+  - name: Admin worlds
+    description: Admin propose/configure/cancel for worlds on administered servers.
+  - name: Admin world invitations
+    description: Informational invitations attached to a world; do NOT gate admission (server access still rules).
 
 security: []   # endpoints declare their own security requirements
 
@@ -713,6 +719,363 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # ─── Player worlds ──────────────────────────────────────────────────────────
+
+  /worlds/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: showWorld
+      tags: [Player worlds]
+      summary: Show a world
+      description: |
+        Returns world status, T0/grace timestamps, region/kingdom counts, and the
+        caller's kingdom summary when present. Non-members of the server receive
+        `404` (existence is not disclosed across server boundaries).
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: World detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/World" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /worlds/{id}/join:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      operationId: joinWorld
+      tags: [Player worlds]
+      summary: Join a world
+      description: |
+        Permitted while `status` is `proposed` or `grace`. During `proposed` a
+        stub kingdom is created (no home region); home regions are assigned at
+        `Worlds::Start`. During `grace` the join immediately assigns a spawn
+        region and applies the §16.8 stockpile bonus.
+
+        Admission is gated by `ServerAccess` (domain whitelist or invite list).
+        `WorldInvitation` records do NOT gate admission.
+      security: [{ playerBearer: [] }]
+      responses:
+        "201":
+          description: Kingdom created or returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Kingdom" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: World not joinable, or `max_worlds_per_account` reached.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /worlds/{id}/map:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: showWorldMap
+      tags: [Player worlds]
+      summary: List every region with terrain, nodes, and adjacency
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Region list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [regions]
+                properties:
+                  regions:
+                    type: array
+                    items: { $ref: "#/components/schemas/RegionSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /worlds/{world_id}/regions/{id}:
+    parameters:
+      - in: path
+        name: world_id
+        required: true
+        schema: { type: integer }
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: showRegion
+      tags: [Player worlds]
+      summary: Region detail (`map <region>`)
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Region detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Region" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /worlds/{world_id}/regions/{id}/adjacent:
+    parameters:
+      - in: path
+        name: world_id
+        required: true
+        schema: { type: integer }
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: showRegionAdjacent
+      tags: [Player worlds]
+      summary: Adjacency list for a region
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Adjacent regions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [regions]
+                properties:
+                  regions:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, terrain]
+                      properties:
+                        id: { type: integer }
+                        name: { type: string }
+                        terrain: { type: string, enum: [plains, forest, hills, mountain, marsh] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /worlds/{world_id}/ruins:
+    parameters:
+      - in: path
+        name: world_id
+        required: true
+        schema: { type: integer }
+    get:
+      operationId: listRuins
+      tags: [Player worlds]
+      summary: List ruins on a world
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Ruin list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ruins]
+                properties:
+                  ruins:
+                    type: array
+                    items: { $ref: "#/components/schemas/Ruin" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ─── Admin worlds ───────────────────────────────────────────────────────────
+
+  /admin/servers/{server_id}/worlds:
+    parameters:
+      - $ref: "#/components/parameters/PathServerId"
+    get:
+      operationId: listAdminWorlds
+      tags: [Admin worlds]
+      summary: List worlds on an administered server
+      security: [{ adminBearer: [] }]
+      responses:
+        "200":
+          description: World list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [worlds]
+                properties:
+                  worlds:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdminWorld" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: proposeWorld
+      tags: [Admin worlds]
+      summary: Propose a new world on this server
+      security: [{ adminBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, min_players, t0_at]
+              properties:
+                name: { type: string, example: "Spring 2026" }
+                slug:
+                  type: string
+                  pattern: "^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$"
+                  example: "spring-2026"
+                min_players: { type: integer, example: 4 }
+                t0_at:
+                  type: string
+                  format: date-time
+                  description: ISO 8601 UTC timestamp for round start (T0).
+                auto_cancel_after_hours:
+                  type: integer
+                  description: Hours after creation before an empty proposed world auto-cancels.
+      responses:
+        "201":
+          description: World created in `proposed` state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminWorld" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`concurrent_world_limit_reached` or `param_missing`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /admin/worlds/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: showAdminWorld
+      tags: [Admin worlds]
+      summary: Show a world the caller administers
+      security: [{ adminBearer: [] }]
+      responses:
+        "200":
+          description: World detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminWorld" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: configureWorld
+      tags: [Admin worlds]
+      summary: Reconfigure a proposed world (name, t0_at, min_players, auto_cancel)
+      security: [{ adminBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                min_players: { type: integer }
+                t0_at: { type: string, format: date-time }
+                auto_cancel_after_hours: { type: integer }
+      responses:
+        "200":
+          description: World updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminWorld" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`world_not_configurable` when the world is past `proposed`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /admin/worlds/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      operationId: cancelWorld
+      tags: [Admin worlds]
+      summary: Cancel a proposed world
+      security: [{ adminBearer: [] }]
+      responses:
+        "200":
+          description: World cancelled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminWorld" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`world_not_cancellable` when the world has started."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  # ─── Admin world invitations (informational) ────────────────────────────────
+
+  /admin/worlds/{world_id}/invitations:
+    parameters:
+      - in: path
+        name: world_id
+        required: true
+        schema: { type: integer }
+    get:
+      operationId: listWorldInvitations
+      tags: [Admin world invitations]
+      summary: List informational invitations on a world
+      description: These records are notification metadata only — they do NOT gate join. `ServerAccess` controls admission.
+      security: [{ adminBearer: [] }]
+      responses:
+        "200":
+          description: Invitations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitations]
+                properties:
+                  invitations:
+                    type: array
+                    items: { $ref: "#/components/schemas/WorldInvitation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: createWorldInvitation
+      tags: [Admin world invitations]
+      summary: Record an informational world invitation
+      security: [{ adminBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "201":
+          description: Invitation recorded (idempotent on duplicates).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorldInvitation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/worlds/{world_id}/invitations/{id}:
+    parameters:
+      - in: path
+        name: world_id
+        required: true
+        schema: { type: integer }
+      - $ref: "#/components/parameters/PathId"
+    delete:
+      operationId: deleteWorldInvitation
+      tags: [Admin world invitations]
+      summary: Remove an informational invitation
+      security: [{ adminBearer: [] }]
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 # ═══════════════════════════════════════════════════════════════════════════════
 
 components:
@@ -761,6 +1124,11 @@ components:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
           examples:
             param_missing: { value: { error: { code: param_missing, message: "param is missing or the value is empty: email" } } }
+    Forbidden:
+      description: Caller is authenticated but not authorized for this resource.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
   schemas:
 
@@ -914,3 +1282,161 @@ components:
           type: object
           additionalProperties: true
         joined_at: { type: string, format: date-time }
+
+    # ─── Phase 2: worlds, regions, nodes, ruins, kingdoms ─────────────────────
+
+    World:
+      type: object
+      description: Player-side world summary; `my_kingdom` is present iff the caller has joined.
+      required: [id, server_id, name, slug, status, min_players, t0_at, region_count, kingdom_count]
+      properties:
+        id: { type: integer }
+        server_id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        status: { type: string, enum: [proposed, grace, active, archived, cancelled] }
+        min_players: { type: integer }
+        t0_at: { type: string, format: date-time }
+        grace_closes_at: { type: [string, "null"], format: date-time }
+        region_count: { type: integer }
+        kingdom_count: { type: integer }
+        my_kingdom: { $ref: "#/components/schemas/Kingdom" }
+
+    AdminWorld:
+      type: object
+      description: Admin-side world detail (includes seed, lifecycle timestamps, wonder metadata).
+      required: [id, server_id, name, slug, status, seed, min_players, auto_cancel_after_hours, t0_at]
+      properties:
+        id: { type: integer }
+        server_id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        seed: { type: string }
+        status: { type: string, enum: [proposed, grace, active, archived, cancelled] }
+        min_players: { type: integer }
+        auto_cancel_after_hours: { type: integer }
+        t0_at: { type: string, format: date-time }
+        grace_closes_at: { type: [string, "null"], format: date-time }
+        archived_at: { type: [string, "null"], format: date-time }
+        cancelled_at: { type: [string, "null"], format: date-time }
+        wonder_name: { type: [string, "null"] }
+
+    Kingdom:
+      type: object
+      required: [id, world_id, stockpiles, joined_at]
+      properties:
+        id: { type: integer }
+        world_id: { type: integer }
+        home_region_id:
+          type: [integer, "null"]
+          description: Nil while the world is `proposed`; assigned at `Worlds::Start` or at join during `grace`.
+        stockpiles:
+          type: object
+          additionalProperties: true
+          description: Per-resource integer stockpiles plus `checkpoint_at`.
+        joined_at: { type: string, format: date-time }
+
+    Position:
+      type: object
+      description: Normalized [0, 1] coordinates from blue-noise sampling at map generation.
+      required: [x, y]
+      properties:
+        x: { type: number, format: float }
+        y: { type: number, format: float }
+
+    NodeSummary:
+      type: object
+      required: [id, resource, tier, is_home_hoard]
+      properties:
+        id: { type: integer }
+        resource: { type: string, enum: [gold, wood, stone, iron] }
+        tier: { type: string, enum: [poor, standard, rich] }
+        is_home_hoard: { type: boolean }
+
+    Node:
+      allOf:
+        - $ref: "#/components/schemas/NodeSummary"
+        - type: object
+          properties:
+            base_rate: { type: integer }
+            owner_kingdom_id: { type: [integer, "null"] }
+
+    RuinSummary:
+      type: object
+      required: [id, tier, claimed]
+      properties:
+        id: { type: integer }
+        tier: { type: string, enum: [minor, standard, major] }
+        claimed: { type: boolean }
+
+    Ruin:
+      type: object
+      required: [id, region_id, region_name, tier, garrison, cache, claimed]
+      properties:
+        id: { type: integer }
+        region_id: { type: integer }
+        region_name: { type: string }
+        tier: { type: string, enum: [minor, standard, major] }
+        garrison:
+          type: object
+          additionalProperties: { type: integer }
+        cache:
+          type: object
+          additionalProperties: { type: integer }
+        claimed: { type: boolean }
+        claimed_by_kingdom_id: { type: [integer, "null"] }
+        claimed_at: { type: [string, "null"], format: date-time }
+
+    RegionSummary:
+      type: object
+      required: [id, name, terrain, position, adjacency, nodes]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        terrain: { type: string, enum: [plains, forest, hills, mountain, marsh] }
+        position: { $ref: "#/components/schemas/Position" }
+        is_hub: { type: boolean }
+        spawn_eligible: { type: boolean }
+        your_spawn: { type: boolean }
+        adjacency:
+          type: array
+          items: { type: integer }
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/NodeSummary" }
+        ruin:
+          oneOf:
+            - { $ref: "#/components/schemas/RuinSummary" }
+            - { type: "null" }
+
+    Region:
+      type: object
+      required: [id, name, terrain, position, adjacency, nodes]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        terrain: { type: string, enum: [plains, forest, hills, mountain, marsh] }
+        position: { $ref: "#/components/schemas/Position" }
+        is_hub: { type: boolean }
+        spawn_eligible: { type: boolean }
+        adjacency:
+          type: array
+          items: { type: integer }
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/Node" }
+        ruin:
+          oneOf:
+            - { $ref: "#/components/schemas/Ruin" }
+            - { type: "null" }
+        owner_kingdom_id: { type: [integer, "null"] }
+
+    WorldInvitation:
+      type: object
+      description: Informational record only — does NOT gate world admission.
+      required: [id, email, invited_by_admin_id, created_at]
+      properties:
+        id: { type: integer }
+        email: { type: string, format: email }
+        invited_by_admin_id: { type: integer }
+        created_at: { type: string, format: date-time }

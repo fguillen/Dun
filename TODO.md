@@ -112,45 +112,50 @@ Two distinct user kinds with separate auth surfaces — both use the same magic-
 Implements `§13` (round trigger), `§16.5` (map gen), `§16.8` (spawn), `§16.10` (terrain), `§16.11 Ruins` placement, `§16.6` (round-over reset).
 
 ### Models
-- [ ] `World` (server_id, name, seed, status: proposed|grace|active|archived, t0_at, grace_closes_at, ended_at, winner_player_id, wonder_name)
-- [ ] `Region` (world_id, name, terrain, position, spawn_eligible boolean, is_hub boolean)
-- [ ] `RegionAdjacency` (region_a_id, region_b_id) — undirected pairs
-- [ ] `Node` (region_id, resource, tier, base_rate, owner_kingdom_id null, garrison jsonb)
-- [ ] `Ruin` (region_id, tier, garrison jsonb, cache jsonb, claimed_by_kingdom_id, claimed_at)
-- [ ] `Kingdom` (world_id, player_profile_id, home_region_id, stockpiles jsonb, joined_at, eliminated_at null)
-- [ ] `WorldInvitation` (world_id, email, status)
+- [x] `World` (server_id, name, seed, status: proposed|grace|active|archived|cancelled, t0_at, grace_closes_at, archived_at, cancelled_at, winner_kingdom_id, wonder_name)
+- [x] `Region` (world_id, name, terrain, position, spawn_eligible boolean, is_hub boolean)
+- [x] `RegionAdjacency` (region_a_id, region_b_id) — undirected pairs, canonical-ordered
+- [x] `Node` (region_id, resource, tier, base_rate, owner_kingdom_id null, garrison jsonb, is_home_hoard)
+- [x] `Ruin` (region_id, tier, garrison jsonb, cache jsonb, claimed_by_kingdom_id, claimed_at)
+- [x] `Kingdom` (world_id, player_profile_id, home_region_id, stockpiles jsonb, metadata jsonb, joined_at, eliminated_at null)
+- [x] `WorldInvitation` (world_id, email, invited_by_admin_id) — informational only; admission still via `ServerAccess`
 
 ### Services
-- [ ] `Worlds::Propose.call(server:, organizer_admin:, min_players:, scheduled_t0:)` — admin-only (per Phase 1)
-- [ ] `Worlds::Configure.call(world, attrs)` — admin-only, before T0
-- [ ] `Worlds::Start.call(world)` — fires when min players + t0 reached; generates map
-- [ ] `MapGeneration::Generate.call(world, seed:, players:)`:
-  - Region count: `clamp(2.5 × players + 6, 16, 64)` per `§16.5`
-  - Planar graph w/ avg degree 2.8–3.5
-  - Terrain biome clustering, target shares per `§16.10`
-  - Node placement: count `1.2 × players`, distributions per `§16.5`, biased to thematic terrain per `§16.10` (70% pref)
-  - Ruin placement per `§16.11`
-- [ ] `MapGeneration::PlaceSpawns.call(world)` — Poisson-disk on region graph, constraints per `§16.5` + `§16.8` + `§16.10` (Plains/Hills only); reserve `ceil(players × 1.5)` slots
-- [ ] `MapGeneration::AssignLateJoiner.call(world, player)` — random reserved slot, `+1000/12h` stockpile bonus capped `+4000` per `§16.8`
-- [ ] `Kingdoms::Bootstrap.call(kingdom)` — starter buildings (4 resource @L1, Barracks L1, Walls L1, Watchtower L1), 500/resource, 20 Levy (`§13`)
-- [ ] `Worlds::Archive.call(world)` — freeze state when winner declared
+- [x] `Worlds::Propose.call(server:, organizer_admin:, name:, min_players:, t0_at:, ...)` — admin-only, enforces `max_concurrent_worlds`, schedules `Worlds::StartJob` at T0
+- [x] `Worlds::Configure.call(world, attrs)` — admin-only, before T0; re-enqueues StartJob if t0_at changes
+- [x] `Worlds::Cancel.call(world, by_admin:)` — admin cancel (proposed → cancelled)
+- [x] `Worlds::Start.call(world)` — fires when min players + t0 reached; generates map, assigns T0 kingdoms, transitions to grace
+- [x] `Worlds::EndGrace.call(world)` — grace → active at T0+72h, releases unused spawn slots
+- [x] `MapGeneration::Generate.call(world, players_count:)` — orchestrator chaining the steps below
+  - [x] Region count: `clamp(2.5 × players + 6, 16, 64)` per `§16.5`
+  - [x] Planar graph w/ avg degree 2.8–3.5 (vendored Bowyer-Watson Delaunay under `lib/dun/delaunay.rb`)
+  - [x] Terrain biome clustering (Voronoi), target shares per `§16.10`
+  - [x] Node placement: count `round(1.2 × players)`, distributions per `§16.5`, biased to thematic terrain per `§16.10` (70%)
+  - [x] Ruin placement per `§16.11`
+- [x] `MapGeneration::PlaceSpawns.call(world, players_count:, rng:)` — max-min Poisson-disk on region graph, constraints per `§16.5` + `§16.8` + `§16.10`; reserves up to `ceil(players × 1.5)` slots, relaxation chain logs warning if short
+- [x] `MapGeneration::AssignLateJoiner.call(world, player_profile, hours_since_t0:)` — picks an unused reserved slot, runs `Kingdoms::Bootstrap` with the elapsed hours
+- [x] `Kingdoms::Bootstrap.call(kingdom, hours_since_t0:)` — records starter buildings metadata + 500/resource base + `§16.8` stockpile bonus (capped +4000)
+- [x] `Worlds::Archive.call(world)` — stub: active → archived (Phase 10 fills out the frozen-state snapshot)
 
 ### API endpoints
-- [ ] `POST  /v1/admin/servers/:id/worlds` (admin: propose/create)
-- [ ] `PATCH /v1/admin/worlds/:id` (admin: configure before T0)
-- [ ] `POST  /v1/admin/worlds/:id/cancel` (admin)
-- [ ] `POST  /v1/worlds/:id/join` (player: during proposed + grace window)
-- [ ] `GET   /v1/worlds/:id` (status, region count, kingdoms)
-- [ ] `GET   /v1/worlds/:id/map` and `GET /v1/worlds/:id/map/:region` (`map`, `map <region>`)
-- [ ] `GET   /v1/worlds/:id/regions/:id/adjacent`
-- [ ] `GET   /v1/worlds/:id/ruins`
+- [x] `GET   /v1/admin/servers/:id/worlds`
+- [x] `POST  /v1/admin/servers/:id/worlds` (admin: propose/create)
+- [x] `GET   /v1/admin/worlds/:id`
+- [x] `PATCH /v1/admin/worlds/:id` (admin: configure before T0)
+- [x] `POST  /v1/admin/worlds/:id/cancel` (admin)
+- [x] `GET   /v1/admin/worlds/:id/invitations` / `POST` / `DELETE` (informational world invitations)
+- [x] `POST  /v1/worlds/:id/join` (player: during proposed + grace window)
+- [x] `GET   /v1/worlds/:id` (status, region count, kingdom count, your kingdom summary)
+- [x] `GET   /v1/worlds/:id/map` and `GET /v1/worlds/:id/regions/:region_id` (`map`, `map <region>`)
+- [x] `GET   /v1/worlds/:id/regions/:region_id/adjacent`
+- [x] `GET   /v1/worlds/:id/ruins`
 
 ### Tests
-- [ ] Seed reproduces identical map (same seed ⇒ identical regions, terrain, nodes, ruins)
-- [ ] Spawn constraints enforced; relaxation order verified (degree → wilderness adjacency; terrain never relaxed)
-- [ ] Min 2-hop spacing between kingdoms
-- [ ] Late-joiner bonus calculation across boundaries (T0, T0+12h, T0+48h, T0+72h)
-- [ ] World status transitions
+- [x] Seed reproduces identical map (same seed ⇒ identical regions, terrain, nodes, ruins)
+- [x] Spawn constraints enforced; relaxation order verified (degree → wilderness adjacency; terrain never relaxed)
+- [x] Min 2-hop spacing between spawns
+- [x] Late-joiner bonus calculation across boundaries (T0, T0+12h, T0+48h, T0+72h)
+- [x] World status transitions (proposed → grace → active → archived; proposed → cancelled)
 
 ---
 
