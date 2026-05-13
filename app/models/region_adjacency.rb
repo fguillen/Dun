@@ -14,7 +14,7 @@ class RegionAdjacency < ApplicationRecord
     find_or_create_by!(region_a_id: a_id, region_b_id: b_id)
   end
 
-  def self.connected?(a_id, b_id)
+  def self.adjacent?(a_id, b_id)
     lo, hi = [ a_id, b_id ].sort
     exists?(region_a_id: lo, region_b_id: hi)
   end

@@ -23,15 +23,15 @@ class RegionAdjacencyTest < ActiveSupport::TestCase
     assert_equal 1, RegionAdjacency.count
   end
 
-  test "connected? returns true regardless of argument order" do
+  test "adjacent? returns true regardless of argument order" do
     world = create(:world)
     a = create(:region, world: world)
     b = create(:region, world: world)
     RegionAdjacency.connect(a, b)
 
-    assert RegionAdjacency.connected?(a.id, b.id)
-    assert RegionAdjacency.connected?(b.id, a.id)
-    assert_not RegionAdjacency.connected?(a.id, a.id)
+    assert RegionAdjacency.adjacent?(a.id, b.id)
+    assert RegionAdjacency.adjacent?(b.id, a.id)
+    assert_not RegionAdjacency.adjacent?(a.id, a.id)
   end
 
   test "endpoints must be distinct" do

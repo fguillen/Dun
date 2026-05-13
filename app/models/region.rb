@@ -21,7 +21,7 @@ class Region < ApplicationRecord
 
   def adjacent_to?(other)
     other_id = other.is_a?(Region) ? other.id : other.to_i
-    RegionAdjacency.connected?(id, other_id)
+    RegionAdjacency.adjacent?(id, other_id)
   end
 
   def x

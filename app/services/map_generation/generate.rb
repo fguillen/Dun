@@ -15,6 +15,7 @@ module MapGeneration
       ActiveRecord::Base.transaction do
         BuildGraph.call(world: @world, players_count: @players_count, rng: rng)
         AssignTerrain.call(world: @world, rng: rng)
+        PlaceSpawns.call(world: @world, players_count: @players_count, rng: rng)
         PlaceNodes.call(world: @world, players_count: @players_count, rng: rng)
       end
 
