@@ -16,7 +16,11 @@ module Worlds
     def call
       raise WorldNotConfigurable, "world is #{@world.status}; only proposed worlds can be configured" unless @world.proposed?
 
+      previous_t0 = @world.t0_at
       @world.update!(@attrs)
+      if @attrs.key?(:t0_at) && @world.t0_at != previous_t0
+        Worlds::StartJob.set(wait_until: @world.t0_at).perform_later(@world.id)
+      end
       @world
     end
   end

@@ -36,7 +36,9 @@ module Worlds
         t0_at: @t0_at
       }
       attrs[:auto_cancel_after_hours] = @auto_cancel_after_hours if @auto_cancel_after_hours.present?
-      @server.worlds.create!(attrs)
+      world = @server.worlds.create!(attrs)
+      Worlds::StartJob.set(wait_until: world.t0_at).perform_later(world.id)
+      world
     end
 
     private
