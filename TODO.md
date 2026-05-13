@@ -10,18 +10,18 @@ Per CLAUDE.md workflow: each task includes tests, ends in a commit, and uses `da
 
 Foundations already partially in place (Rails 8, auth scaffold, Tailwind, factory_bot). Lock the rest before feature work.
 
-- [ ] Confirm Ruby 4.0.4 / Rails 8.1.3 / PostgreSQL 18+ versions match `§17.5`
-- [ ] Add Solid Queue, Solid Cache, Solid Cable to Gemfile and configure (`§17.5`)
-- [ ] Configure Active Job to use Solid Queue, set up `bin/jobs` worker process in `Procfile.dev`
-- [ ] Mount API namespace under `/v1/...` (versioned per `§17.5`)
-- [ ] Add `Api::BaseController` with API-key auth (Bearer header), JSON-only renders, structured error format `{error: {code, message, retry_after?}}`
-- [ ] Add request ID / correlation ID middleware for observability (`§17.5`)
-- [ ] Set up `pagy` for any paginated list endpoints (trade ledger, history, leaderboards)
-- [ ] Add `webmock` + `mocha` to test helper; `parallelize(workers: :number_of_processors)` (already CLAUDE.md convention)
-- [ ] Add `data_migrate` gem and configure (`§seeds/data` section in CLAUDE.md)
-- [ ] Add `lograge` (or `ougai`) for structured JSON logs (`§17.5`)
-- [ ] OpenTelemetry SDK + auto-instrumentation gems wired with env-driven exporter (`§17.5`)
-- [ ] Set up `.env.example` and `ENV.fetch(...)` boot for required secrets
+- [x] Confirm Ruby 4.0.4 / Rails 8.1.3 / PostgreSQL 18+ versions match `§17.5`
+- [x] Add Solid Queue, Solid Cache, Solid Cable to Gemfile and configure (`§17.5`)
+- [x] Configure Active Job to use Solid Queue, set up `bin/jobs` worker process in `Procfile.dev`
+- [x] Mount API namespace under `/v1/...` (versioned per `§17.5`)
+- [x] Add `Api::BaseController` with API-key auth (Bearer header), JSON-only renders, structured error format `{error: {code, message, retry_after?}}`
+- [x] Add request ID / correlation ID middleware for observability (`§17.5`)
+- [x] Set up `pagy` for any paginated list endpoints (trade ledger, history, leaderboards)
+- [x] Add `webmock` + `mocha` to test helper; `parallelize(workers: :number_of_processors)` (already CLAUDE.md convention)
+- [x] Add `data_migrate` gem and configure (`§seeds/data` section in CLAUDE.md)
+- [x] Add `lograge` (or `ougai`) for structured JSON logs (`§17.5`)
+- [x] OpenTelemetry SDK + auto-instrumentation gems wired with env-driven exporter (`§17.5`)
+- [x] Set up `.env.example` and `ENV.fetch(...)` boot for required secrets
 
 ---
 
@@ -29,78 +29,80 @@ Foundations already partially in place (Rails 8, auth scaffold, Tailwind, factor
 
 Implements `§17.1` (auth, handles, real names) and `§16.7` (server-scoped identity, access rules).
 
-Two distinct user kinds with separate auth:
+Two distinct user kinds with separate auth surfaces — both use the same magic-link + 90-day Bearer `ApiKey` shape:
 
-- **Player** — plays the game from the CLI. Magic-link sign-in, long-lived `ApiKey` bearer tokens. Lives entirely under `/v1/...` (non-admin).
-- **Admin** — configures servers, creates and configures worlds, invites players, manages other admins. Password-based with session cookies (Rails 8 auth generator shape). All admin endpoints scoped under `/v1/admin/...`.
+- **Player** — plays the game from the CLI. `/v1/auth/...` issues a player-scope ApiKey.
+- **Admin** — configures servers, creates and configures worlds, invites players, manages other admins. `/v1/admin/auth/...` issues an admin-scope ApiKey. Same CLI binary as the player; admin subcommands gated by possession of an admin ApiKey.
+
+`MagicLink` and `ApiKey` are polymorphic on `owner` (`Player` or `Admin`). A scope mismatch (player token at the admin exchange or vice versa) is rejected.
 
 ### Player models
-- [ ] `Player` (email, name, ...) keyed by email — uses magic link only, no password stored
-- [ ] `MagicLink` (token, email, expires_at, consumed_at) — 15 min expiry, single-use (`§17.1`)
-- [ ] `ApiKey` (player_id, token_digest, name, last_used_at, expires_at, revoked_at) — 90-day rolling
-- [ ] `PlayerProfile` (server_id, player_id, handle, real_name, stats jsonb, locked_during_round derived)
+- [x] `Player` (email, name, ...) keyed by email — uses magic link only, no password stored
+- [x] `MagicLink` (token, email, expires_at, consumed_at) — 15 min expiry, single-use (`§17.1`) — polymorphic owner (Player|Admin)
+- [x] `ApiKey` (player_id, token_digest, name, last_used_at, expires_at, revoked_at) — 90-day rolling — polymorphic owner (Player|Admin)
+- [x] `PlayerProfile` (server_id, player_id, handle, real_name, stats jsonb, locked_during_round derived)
 
-### Admin models (separate auth)
-- [ ] `Admin` (email, password_digest, name, ...) — Rails 8 auth generator
-- [ ] `Admin` → `has_many :admin_sessions`
-- [ ] `AdminSession` (admin_id, user_agent, ip_address, ...) — cookie-based session per Rails 8 auth generator
+### Admin models
+- [x] `Admin` (email, name) — same magic-link + ApiKey substrate as Player (password fields not used)
+- [x] ~~`Admin` → `has_many :admin_sessions`~~ — superseded: Admin shares the polymorphic ApiKey substrate
+- [x] ~~`AdminSession`~~ — superseded: no cookie sessions; admin uses Bearer ApiKey on `/v1/admin/...`
 
 ### Server models (shared)
-- [ ] `Server` (slug, name, owner_admin_id, max_concurrent_worlds default 2, max_worlds_per_account default 2)
-- [ ] `ServerAdminship` (server_id, admin_id, role, granted_by_admin_id, joined_at) — at least one admin always (`§17.1`)
-- [ ] `ServerAccess` (server_id, kind: domain|invite, value) — union access model (`§16.7`)
-- [ ] `ServerMembership` (server_id, player_id, joined_at) — player-side admission
+- [x] `Server` (slug, name, owner_admin_id, max_concurrent_worlds default 2, max_worlds_per_account default 2)
+- [x] `ServerAdminship` (server_id, admin_id, role, granted_by_admin_id, joined_at) — at least one admin always (`§17.1`)
+- [x] `ServerAccess` (server_id, kind: domain|invite, value) — union access model (`§16.7`)
+- [x] `ServerMembership` (server_id, player_id, joined_at) — player-side admission
 
 ### Auth concerns / base controllers
-- [ ] `Authentication` concern + `Api::BaseController` requiring valid `ApiKey` Bearer token (`§17.1`)
-- [ ] `Admin::Authentication` concern + `Api::Admin::BaseController` requiring admin session, enforces admin role (per CLAUDE.md namespace-scoped base controller pattern)
-- [ ] All admin routes mount under `namespace :admin` so paths look like `/v1/admin/...`
+- [x] `Api::Authentication` concern + `Api::BaseController` requiring valid player-scope `ApiKey` Bearer token (`§17.1`)
+- [x] `Api::Admin::Authentication` concern + `Api::Admin::BaseController` requiring valid admin-scope `ApiKey` Bearer token
+- [x] All admin routes mount under `namespace :admin` so paths look like `/v1/admin/...`
 
 ### Player services
-- [ ] `MagicLinks::Request.call(email)` — creates magic link, sends email via ActionMailer (provider TBD per `§17.1` follow-up; start with letter_opener in dev)
-- [ ] `MagicLinks::Consume.call(token)` — validates, issues `ApiKey`, runs server admission against `ServerAccess` rules
-- [ ] `ApiKeys::Authenticate.call(token)` — verifies, refreshes `last_used_at`, expires when stale
-- [ ] `Players::SetHandle.call(profile, handle)` — between-rounds-only, reserved list, format validation
-- [ ] `Players::SetRealName.call(profile, name)`
+- [x] `MagicLinks::Request.call(email:, scope:)` — creates magic link, sends email via ActionMailer (letter_opener in dev; provider TBD per `§17.1` follow-up)
+- [x] `MagicLinks::Consume.call(raw_token:, scope:)` — validates, issues `ApiKey`, runs server admission against `ServerAccess` rules + creates per-server `PlayerProfile`
+- [x] `ApiKey.authenticate(raw_token, owner_type:)` — verifies, refreshes `last_used_at`, slides expiry forward; `ApiKeys::Revoke` for explicit revocation
+- [x] `Players::SetHandle.call(profile, handle)` — locked-during-round guard, reserved list, format validation
+- [x] `Players::SetRealName.call(profile, name)`
 
 ### Admin services
-- [ ] `Admins::SignIn.call(email, password)` — issues `AdminSession`
-- [ ] `Admins::Invite.call(by_admin:, email:)` — creates another `Admin` and grants `ServerAdminship`; cannot drop below one admin
-- [ ] `Admins::RevokeAdminship.call(by_admin:, target_admin:, server:)` — guard last-admin invariant
-- [ ] `Servers::Create.call(owner_admin:, name:, ...)` — initial admin = owner
-- [ ] `Servers::Configure.call(server, attrs)` — limits and access rules (not retroactive per `§16.7`)
-- [ ] `ServerInvitations::Create.call(server, email)` — adds an invite-kind `ServerAccess` entry; players matching it can `POST /v1/servers/:id/join`
+- [x] ~~`Admins::SignIn`~~ — superseded by `MagicLinks::Request`/`Consume` with `scope: "admin"`
+- [x] `Admins::Invite.call(by_admin:, server:, email:)` — find-or-creates `Admin` + grants `ServerAdminship`; idempotent
+- [x] `Admins::RevokeAdminship.call(by_admin:, target_admin:, server:)` — guard last-admin invariant
+- [x] `Servers::Create.call(owner_admin:, name:, ...)` — initial admin = owner
+- [x] `Servers::Configure.call(server, attrs)` — limits and access rules (not retroactive per `§16.7`)
+- [x] `ServerInvitations::Create.call(server:, email:)` — adds an invite-kind `ServerAccess` entry; players matching it can `POST /v1/servers/:id/join`
 
 ### Player API endpoints (`/v1/...`)
-- [ ] `POST   /v1/auth/magic_link` → email magic link
-- [ ] `POST   /v1/auth/exchange` → consume link, return API key
-- [ ] `GET    /v1/auth/keys` / `DELETE /v1/auth/keys/:id`
-- [ ] `GET    /v1/servers` (list servers the player can access)
-- [ ] `POST   /v1/servers/:id/join` (first-time admission via domain or invite)
-- [ ] `GET    /v1/servers/:id/players/:handle` (`player show`)
-- [ ] `PATCH  /v1/servers/:id/me` (handle / real name)
+- [x] `POST   /v1/auth/magic_link` → email magic link
+- [x] `POST   /v1/auth/exchange` → consume link, return API key
+- [x] `GET    /v1/auth/keys` / `DELETE /v1/auth/keys/:id`
+- [x] `GET    /v1/servers` (list servers the player can access)
+- [x] `POST   /v1/servers/:id/join` (first-time admission via domain or invite)
+- [x] `GET    /v1/servers/:server_id/players/:handle` (`player show`)
+- [x] `PATCH  /v1/servers/:id/me` (handle / real name)
 
 ### Admin API endpoints (`/v1/admin/...`)
-- [ ] `POST   /v1/admin/auth/sign_in` (password) → session cookie
-- [ ] `DELETE /v1/admin/auth/sign_out`
-- [ ] `POST   /v1/admin/auth/password_reset` (request) and consume
-- [ ] `GET    /v1/admin/servers` (servers this admin administers)
-- [ ] `POST   /v1/admin/servers` (create server, creator = initial admin)
-- [ ] `PATCH  /v1/admin/servers/:id` (access rules, world limits)
-- [ ] `GET    /v1/admin/servers/:id/admins` / `POST` / `DELETE /:admin_id` (manage co-admins, last-admin guarded)
-- [ ] `GET    /v1/admin/servers/:id/invitations` / `POST` / `DELETE /:id` (invite players by email)
-- [ ] `GET    /v1/admin/servers/:id/members` (list player memberships, real names visible)
+- [x] `POST   /v1/admin/auth/magic_link` → email admin-scope magic link
+- [x] `POST   /v1/admin/auth/exchange` → consume link, return admin ApiKey
+- [x] `GET    /v1/admin/auth/keys` / `DELETE /v1/admin/auth/keys/:id`
+- [x] `GET    /v1/admin/servers` (servers this admin administers)
+- [x] `POST   /v1/admin/servers` (create server, creator = initial admin)
+- [x] `PATCH  /v1/admin/servers/:id` (world limits; access rules via the invitations subresource)
+- [x] `GET    /v1/admin/servers/:server_id/admins` / `POST` / `DELETE /:id` (manage co-admins, last-admin guarded)
+- [x] `GET    /v1/admin/servers/:server_id/invitations` / `POST` / `DELETE /:id` (invite players by email)
+- [x] `GET    /v1/admin/servers/:server_id/members` (list player memberships, real names visible)
 
 ### Tests
-- [ ] Magic link expiry, single-use, email delivery (WebMock for any HTTP)
-- [ ] Domain whitelist + invite list union semantics
-- [ ] Handle uniqueness (case-insensitive, per-server), reserved words, format
-- [ ] Handle lock during active round membership
-- [ ] API key 90-day rolling expiry, revocation
-- [ ] Admin sign-in / sign-out; admin session scoped via cookies
-- [ ] Admin endpoints reject API-key (player) auth; player endpoints reject admin-session auth
-- [ ] Last-admin invariant: cannot revoke / delete the final admin on a server
-- [ ] `Servers::Configure` not retroactive on existing memberships
+- [x] Magic link expiry, single-use, email delivery (WebMock for any HTTP)
+- [x] Domain whitelist + invite list union semantics
+- [x] Handle uniqueness (case-insensitive, per-server), reserved words, format
+- [x] Handle lock during active round membership (wiring tested via stub; Phase 2 activates `locked?`)
+- [x] API key 90-day rolling expiry, revocation
+- [x] Magic-link + ApiKey scope isolation (player vs admin) at both consume time and request time
+- [x] Admin endpoints reject player-scope ApiKey; player endpoints reject admin-scope ApiKey
+- [x] Last-admin invariant: cannot revoke / delete the final admin on a server
+- [x] `Servers::Configure` not retroactive on existing memberships
 
 ---
 
