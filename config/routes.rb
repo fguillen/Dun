@@ -31,7 +31,7 @@ Rails.application.routes.draw do
         delete "auth/keys/:id"   => "keys#destroy",        as: :auth_key
       end
 
-      resources :servers, only: %i[index create update] do
+      resources :servers, only: %i[index create update destroy] do
         scope module: :servers do
           resources :admins,      only: %i[index create destroy]
           resources :invitations, only: %i[index create destroy]

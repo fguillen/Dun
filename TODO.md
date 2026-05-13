@@ -89,6 +89,7 @@ Two distinct user kinds with separate auth surfaces — both use the same magic-
 - [x] `GET    /v1/admin/servers` (servers this admin administers)
 - [x] `POST   /v1/admin/servers` (create server, creator = initial admin)
 - [x] `PATCH  /v1/admin/servers/:id` (world limits; access rules via the invitations subresource)
+- [x] `DELETE /v1/admin/servers/:id` (hard delete; cascades to adminships, memberships, accesses, profiles)
 - [x] `GET    /v1/admin/servers/:server_id/admins` / `POST` / `DELETE /:id` (manage co-admins, last-admin guarded)
 - [x] `GET    /v1/admin/servers/:server_id/invitations` / `POST` / `DELETE /:id` (invite players by email)
 - [x] `GET    /v1/admin/servers/:server_id/members` (list player memberships, real names visible)

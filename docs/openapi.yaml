@@ -524,6 +524,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    delete:
+      operationId: deleteServer
+      tags: [Admin servers]
+      summary: Delete a server
+      description: |
+        Hard-deletes the server. Cascades through all dependent rows:
+        adminships, memberships, accesses, and player profiles.
+        Any admin who administers the server may delete it.
+      security: [{ adminBearer: [] }]
+      responses:
+        "204": { description: Server deleted. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ─── Admin co-admins ────────────────────────────────────────────────────────
 

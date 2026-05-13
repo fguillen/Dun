@@ -19,6 +19,11 @@ module Api
         render json: serialize(server.reload)
       end
 
+      def destroy
+        ::Servers::Delete.call(administered_server)
+        head :no_content
+      end
+
       private
 
       def administered_server

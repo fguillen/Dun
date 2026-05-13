@@ -66,6 +66,60 @@ module Api
         get "/v1/admin/servers", headers: auth_headers
         assert_response :unauthorized
       end
+
+      test "DELETE /v1/admin/servers/:id requires admin auth" do
+        server = create(:server)
+        delete "/v1/admin/servers/#{server.id}"
+        assert_response :unauthorized
+      end
+
+      test "DELETE /v1/admin/servers/:id deletes a server the admin administers" do
+        admin = create(:admin)
+        server = create(:server, owner: admin)
+        authenticate_as_admin(admin)
+
+        delete "/v1/admin/servers/#{server.id}", headers: auth_headers
+        assert_response :no_content
+        assert_not Server.exists?(server.id)
+      end
+
+      test "DELETE /v1/admin/servers/:id cascades to adminships, memberships, accesses, and profiles" do
+        admin = create(:admin)
+        server = create(:server, owner: admin)
+        membership = create(:server_membership, server: server)
+        profile    = create(:player_profile, server: server)
+        access     = create(:server_access, server: server)
+        adminship_ids = server.server_adminships.pluck(:id)
+        authenticate_as_admin(admin)
+
+        delete "/v1/admin/servers/#{server.id}", headers: auth_headers
+        assert_response :no_content
+
+        assert_not ServerMembership.exists?(membership.id)
+        assert_not PlayerProfile.exists?(profile.id)
+        assert_not ServerAccess.exists?(access.id)
+        assert_equal 0, ServerAdminship.where(id: adminship_ids).count
+      end
+
+      test "an admin cannot delete a server they don't administer" do
+        admin = create(:admin)
+        other_server = create(:server)
+        authenticate_as_admin(admin)
+
+        delete "/v1/admin/servers/#{other_server.id}", headers: auth_headers
+        assert_response :not_found
+        assert Server.exists?(other_server.id)
+      end
+
+      test "DELETE /v1/admin/servers/:id rejects a player-scope ApiKey" do
+        player = create(:player)
+        server = create(:server)
+        authenticate_as_player(player)
+
+        delete "/v1/admin/servers/#{server.id}", headers: auth_headers
+        assert_response :unauthorized
+        assert Server.exists?(server.id)
+      end
     end
   end
 end
