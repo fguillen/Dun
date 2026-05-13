@@ -32,6 +32,10 @@ module Api
 
           get "/v1/admin/servers/#{other_server.id}/worlds", headers: auth_headers
           assert_response :not_found
+          assert_equal "not_found", response.parsed_body.dig("error", "code")
+          assert_equal "Resource not found", response.parsed_body.dig("error", "message")
+          refute_match(/ServerAdminship|WHERE|admin_id/i, response.parsed_body.dig("error", "message"),
+                       "AR internals must not leak into the error envelope")
         end
 
         test "POST /v1/admin/servers/:server_id/worlds creates a proposed world" do

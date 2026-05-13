@@ -18,7 +18,8 @@ module Api
     end
 
     def handle_not_found(error)
-      render_error(code: "not_found", message: error.message, status: :not_found)
+      Rails.logger.debug "Record not found: #{error.model}, message: #{error.message}"
+      render_error(code: "not_found", message: "Resource not found", status: :not_found)
     end
 
     def handle_invalid(error)
