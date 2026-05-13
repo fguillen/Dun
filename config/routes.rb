@@ -12,12 +12,26 @@ Rails.application.routes.draw do
       delete "auth/keys/:id"   => "keys#destroy",        as: :auth_key
     end
 
+    resources :servers, only: %i[index] do
+      member do
+        post :join
+      end
+    end
+
     namespace :admin do
       scope module: :auth do
         post   "auth/magic_link" => "magic_links#create",  as: :auth_magic_link
         post   "auth/exchange"   => "magic_links#exchange", as: :auth_exchange
         get    "auth/keys"       => "keys#index",          as: :auth_keys
         delete "auth/keys/:id"   => "keys#destroy",        as: :auth_key
+      end
+
+      resources :servers, only: %i[index create update] do
+        scope module: :servers do
+          resources :admins,      only: %i[index create destroy]
+          resources :invitations, only: %i[index create destroy]
+          resources :members,     only: %i[index]
+        end
       end
     end
   end
