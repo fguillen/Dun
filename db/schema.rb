@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_13_120001) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_13_120002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -50,6 +50,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_120001) do
     t.index ["token_digest"], name: "index_magic_links_on_token_digest", unique: true
   end
 
+  create_table "nodes", force: :cascade do |t|
+    t.integer "base_rate", null: false
+    t.datetime "created_at", null: false
+    t.jsonb "garrison", default: {}, null: false
+    t.boolean "is_home_hoard", default: false, null: false
+    t.bigint "owner_kingdom_id"
+    t.bigint "region_id", null: false
+    t.string "resource", null: false
+    t.string "tier", null: false
+    t.datetime "updated_at", null: false
+    t.index ["owner_kingdom_id"], name: "index_nodes_on_owner_kingdom_id"
+    t.index ["region_id"], name: "index_nodes_on_region_id"
+  end
+
   create_table "player_profiles", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.citext "handle"
@@ -70,6 +84,44 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_120001) do
     t.string "name", null: false
     t.datetime "updated_at", null: false
     t.index ["email"], name: "index_players_on_email", unique: true
+  end
+
+  create_table "region_adjacencies", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "region_a_id", null: false
+    t.bigint "region_b_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["region_a_id", "region_b_id"], name: "index_region_adjacencies_on_region_a_id_and_region_b_id", unique: true
+    t.index ["region_a_id"], name: "index_region_adjacencies_on_region_a_id"
+    t.index ["region_b_id"], name: "index_region_adjacencies_on_region_b_id"
+  end
+
+  create_table "regions", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.boolean "is_hub", default: false, null: false
+    t.string "name", null: false
+    t.jsonb "position", default: {}, null: false
+    t.boolean "spawn_eligible", default: false, null: false
+    t.string "terrain", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "world_id", null: false
+    t.index ["world_id", "name"], name: "index_regions_on_world_id_and_name", unique: true
+    t.index ["world_id", "spawn_eligible"], name: "index_regions_on_world_id_and_spawn_eligible"
+    t.index ["world_id", "terrain"], name: "index_regions_on_world_id_and_terrain"
+    t.index ["world_id"], name: "index_regions_on_world_id"
+  end
+
+  create_table "ruins", force: :cascade do |t|
+    t.jsonb "cache", default: {}, null: false
+    t.datetime "claimed_at"
+    t.bigint "claimed_by_kingdom_id"
+    t.datetime "created_at", null: false
+    t.jsonb "garrison", default: {}, null: false
+    t.bigint "region_id", null: false
+    t.string "tier", null: false
+    t.datetime "updated_at", null: false
+    t.index ["claimed_by_kingdom_id"], name: "index_ruins_on_claimed_by_kingdom_id"
+    t.index ["region_id"], name: "index_ruins_on_region_id"
   end
 
   create_table "server_accesses", force: :cascade do |t|
@@ -151,8 +203,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_120001) do
     t.index ["status", "t0_at"], name: "index_worlds_on_status_and_t0_at"
   end
 
+  add_foreign_key "nodes", "regions"
   add_foreign_key "player_profiles", "players"
   add_foreign_key "player_profiles", "servers"
+  add_foreign_key "region_adjacencies", "regions", column: "region_a_id"
+  add_foreign_key "region_adjacencies", "regions", column: "region_b_id"
+  add_foreign_key "regions", "worlds"
+  add_foreign_key "ruins", "regions"
   add_foreign_key "server_accesses", "servers"
   add_foreign_key "server_adminships", "admins"
   add_foreign_key "server_adminships", "admins", column: "granted_by_admin_id"

@@ -5,6 +5,9 @@ class World < ApplicationRecord
   belongs_to :server
 
   has_many :world_invitations, dependent: :destroy
+  has_many :regions, dependent: :destroy
+  has_many :nodes, through: :regions
+  has_many :ruins, through: :regions
 
   normalizes :slug, with: ->(slug) { slug.to_s.strip.downcase }
 
