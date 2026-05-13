@@ -1,0 +1,903 @@
+openapi: 3.1.0
+info:
+  title: dun HTTP API
+  version: "1.0.0-phase1"
+  description: |
+    JSON API for the `dun` backend. The CLI gem and any future integration
+    consume only this surface.
+
+    ## Authentication
+
+    Bearer ApiKey, supplied as `Authorization: Bearer <api_key>`.
+
+    - **Player** keys are issued by `POST /auth/exchange` and accepted on
+      non-admin routes.
+    - **Admin** keys are issued by `POST /admin/auth/exchange` and accepted
+      on `/admin/...` routes.
+
+    A player key presented at an admin endpoint, or vice versa, returns
+    `401 unauthorized`.
+
+    ## Rolling expiry
+
+    Every successful authenticated request slides the key's `expires_at`
+    forward to 90 days from now and refreshes `last_used_at`. A key
+    untouched for 90 days expires and must be re-issued via a fresh
+    magic link.
+
+    ## Error envelope
+
+    Every 4xx / 5xx response uses:
+
+    ```json
+    { "error": { "code": "string_code", "message": "human readable", "retry_after": 30 } }
+    ```
+
+    `retry_after` is present only on rate-limited responses (429).
+
+    ## Request IDs
+
+    Every response echoes `X-Request-Id` (auto-generated if absent). The
+    same ID is included in lograge JSON logs and OpenTelemetry traces.
+
+    ## Game design source of truth
+
+    See [docs/dun Game Design Document.v3.md](dun%20Game%20Design%20Document.v3.md).
+    Section refs like `§17.1` point at that doc.
+
+servers:
+  - url: http://localhost:3000/v1
+    description: Local development
+
+tags:
+  - name: Health
+    description: Unauthenticated liveness check.
+  - name: Player auth
+    description: Magic-link request / exchange and ApiKey management for players.
+  - name: Player servers
+    description: Player-facing server listing + membership.
+  - name: Player profile
+    description: Per-server handle, real name, and profile lookups.
+  - name: Admin auth
+    description: Magic-link request / exchange and ApiKey management for admins.
+  - name: Admin servers
+    description: Server CRUD restricted to administered servers.
+  - name: Admin co-admins
+    description: Manage `ServerAdminship` rows; last-admin invariant enforced.
+  - name: Admin invitations
+    description: Manage invite-kind `ServerAccess` rows on a server.
+  - name: Admin members
+    description: Read-only listing of player memberships on a server.
+
+security: []   # endpoints declare their own security requirements
+
+paths:
+
+  /health:
+    get:
+      operationId: getHealth
+      tags: [Health]
+      summary: Liveness check
+      security: []
+      responses:
+        "200":
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  # ─── Player auth ────────────────────────────────────────────────────────────
+
+  /auth/magic_link:
+    post:
+      operationId: requestPlayerMagicLink
+      tags: [Player auth]
+      summary: Request a player magic-link email
+      description: |
+        Enqueues `MagicLinkMailer#send_link` with `scope: "player"`. The
+        response shape is identical whether or not a `Player` already
+        exists for the email (no enumeration leak).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: alice@example.com
+      responses:
+        "202": { description: Mailer enqueued. }
+        "422":
+          $ref: "#/components/responses/ParamMissing"
+
+  /auth/exchange:
+    post:
+      operationId: exchangePlayerMagicLink
+      tags: [Player auth]
+      summary: Exchange a magic-link token for a player ApiKey
+      description: |
+        Consumes a magic-link token and issues a fresh player-scope
+        `ApiKey`. The raw key is shown **once** in this response; only
+        its SHA-256 digest is persisted.
+
+        On success the service also:
+        1. Find-or-creates the `Player` by email (default name from
+           local-part).
+        2. Iterates every `Server` and creates `ServerMembership` +
+           `PlayerProfile` for any whose `ServerAccess` admits the email
+           (§16.7 union rules).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: Raw magic-link token (from email).
+      responses:
+        "201":
+          description: Player ApiKey issued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeResponse"
+        "401":
+          description: Token invalid, expired, already consumed, or wrong scope.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+              examples:
+                invalid_token: { value: { error: { code: invalid_token,    message: "Magic link is invalid" } } }
+                expired:       { value: { error: { code: expired,          message: "Magic link has expired" } } }
+                already:       { value: { error: { code: already_consumed, message: "Magic link has already been used" } } }
+
+  /auth/keys:
+    get:
+      operationId: listPlayerApiKeys
+      tags: [Player auth]
+      summary: List the current player's ApiKeys
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: List of keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApiKeyEntry" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/keys/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    delete:
+      operationId: revokePlayerApiKey
+      tags: [Player auth]
+      summary: Revoke an ApiKey
+      description: |
+        Sets `revoked_at` on the named key. Revoking the current key is
+        allowed; subsequent requests with it 401.
+      security: [{ playerBearer: [] }]
+      responses:
+        "204": { description: Revoked. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ─── Player servers ─────────────────────────────────────────────────────────
+
+  /servers:
+    get:
+      operationId: listPlayerServers
+      tags: [Player servers]
+      summary: List servers the player is a member of OR eligible to join
+      description: |
+        Returns the union of:
+        1. Servers the current player already has a `ServerMembership` on
+           (`member: true`).
+        2. Servers whose `ServerAccess` admits the player's email
+           (`member: false`).
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: List of servers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [servers]
+                properties:
+                  servers:
+                    type: array
+                    items: { $ref: "#/components/schemas/ServerSummary" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /servers/{id}/join:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      operationId: joinServer
+      tags: [Player servers]
+      summary: Join a server the player is admitted to
+      description: |
+        Creates a `ServerMembership` if any of the server's
+        `ServerAccess` rules admits the player's email. Idempotent — a
+        re-join returns the same `201` with the existing membership.
+      security: [{ playerBearer: [] }]
+      responses:
+        "201":
+          description: Membership created (or already present).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [membership_id, server]
+                properties:
+                  membership_id: { type: integer }
+                  server: { $ref: "#/components/schemas/ServerSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Player is not admitted to this server.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+              examples:
+                forbidden: { value: { error: { code: forbidden, message: "You are not admitted to this server" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /servers/{id}/me:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    patch:
+      operationId: updateOwnProfile
+      tags: [Player profile]
+      summary: Update handle and/or real name for this server
+      description: |
+        Updates the current player's per-server profile.
+
+        `handle` rules (§17.1):
+        - Length 3–20.
+        - Must start with a letter.
+        - Allowed characters: `a-zA-Z0-9_` plus single internal spaces.
+        - No leading, trailing, or consecutive spaces.
+        - Reserved (case-insensitive): `admin`, `system`, `dun`, `world`,
+          `neutral`, `wilderness`, `server`, `anonymous`, `none`, `null`.
+        - Case-preserved on display, case-insensitive for uniqueness
+          within a server.
+
+        `real_name` is 1–60 characters, unicode permitted.
+
+        Either field may be omitted (no-op for the missing field). Phase
+        2 will activate the `handle_locked` guard during active rounds.
+      security: [{ playerBearer: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                handle:    { type: string, minLength: 3, maxLength: 20, example: IronFist }
+                real_name: { type: string, minLength: 1, maxLength: 60, example: "Alice Example" }
+      responses:
+        "200":
+          description: Profile updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlayerProfileWrite" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: Validation or lock failure.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+              examples:
+                invalid:        { value: { error: { code: invalid,        message: "Handle is reserved" } } }
+                handle_locked:  { value: { error: { code: handle_locked,  message: "Handle is locked during an active round" } } }
+
+  /servers/{serverId}/players/{handle}:
+    parameters:
+      - in: path
+        name: serverId
+        required: true
+        schema: { type: integer }
+      - in: path
+        name: handle
+        required: true
+        schema: { type: string }
+    get:
+      operationId: showPlayerProfile
+      tags: [Player profile]
+      summary: Show a player profile by handle
+      description: |
+        Returns the per-server profile including the real name. Caller
+        must be a member of the server (§17.1: real name visible only to
+        server members).
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlayerProfileRead" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Caller is not a member of this server.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ─── Admin auth ─────────────────────────────────────────────────────────────
+
+  /admin/auth/magic_link:
+    post:
+      operationId: requestAdminMagicLink
+      tags: [Admin auth]
+      summary: Request an admin magic-link email
+      description: 'Enqueues `MagicLinkMailer#send_link` with `scope: "admin"`.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, example: boss@example.com }
+      responses:
+        "202": { description: Mailer enqueued. }
+        "422": { $ref: "#/components/responses/ParamMissing" }
+
+  /admin/auth/exchange:
+    post:
+      operationId: exchangeAdminMagicLink
+      tags: [Admin auth]
+      summary: Exchange an admin magic-link token for an admin ApiKey
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "201":
+          description: Admin ApiKey issued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExchangeResponse" }
+        "401":
+          description: Token invalid, expired, already consumed, or wrong scope.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /admin/auth/keys:
+    get:
+      operationId: listAdminApiKeys
+      tags: [Admin auth]
+      summary: List the current admin's ApiKeys
+      security: [{ adminBearer: [] }]
+      responses:
+        "200":
+          description: List of admin keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApiKeyEntry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /admin/auth/keys/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    delete:
+      operationId: revokeAdminApiKey
+      tags: [Admin auth]
+      summary: Revoke an admin ApiKey
+      security: [{ adminBearer: [] }]
+      responses:
+        "204": { description: Revoked. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ─── Admin servers ──────────────────────────────────────────────────────────
+
+  /admin/servers:
+    get:
+      operationId: listAdminServers
+      tags: [Admin servers]
+      summary: List servers this admin administers
+      security: [{ adminBearer: [] }]
+      responses:
+        "200":
+          description: Servers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [servers]
+                properties:
+                  servers:
+                    type: array
+                    items: { $ref: "#/components/schemas/Server" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: createServer
+      tags: [Admin servers]
+      summary: Create a server with the caller as owner
+      description: |
+        Creates a new server and a `ServerAdminship(role: "owner")` for
+        the calling admin in one transaction. Slug is auto-derived from
+        the name when not provided.
+      security: [{ adminBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "Acme Co" }
+                slug:
+                  type: string
+                  pattern: "^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$"
+                  description: 3-40 chars, lowercase alnum + hyphens; auto-derived from name when omitted.
+                  example: acme
+      responses:
+        "201":
+          description: Server created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Server" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422":
+          description: Slug taken or invalid; name blank.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /admin/servers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    patch:
+      operationId: updateServer
+      tags: [Admin servers]
+      summary: Update world limits / display name
+      description: |
+        Whitelisted fields: `name`, `max_concurrent_worlds`,
+        `max_worlds_per_account`. Anything else (slug, owner) is
+        silently ignored.
+
+        Per §16.7, limit changes apply at join time only — existing
+        memberships are never retroactively pruned.
+      security: [{ adminBearer: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                max_concurrent_worlds:  { type: integer, minimum: 0, example: 4 }
+                max_worlds_per_account: { type: integer, minimum: 0, example: 2 }
+      responses:
+        "200":
+          description: Updated server.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Server" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  # ─── Admin co-admins ────────────────────────────────────────────────────────
+
+  /admin/servers/{serverId}/admins:
+    parameters:
+      - $ref: "#/components/parameters/PathServerId"
+    get:
+      operationId: listServerAdmins
+      tags: [Admin co-admins]
+      summary: List adminships on a server
+      description: Returns rows ordered by `joined_at`. Includes the owner.
+      security: [{ adminBearer: [] }]
+      responses:
+        "200":
+          description: Adminships.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [admins]
+                properties:
+                  admins:
+                    type: array
+                    items: { $ref: "#/components/schemas/Adminship" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: inviteServerAdmin
+      tags: [Admin co-admins]
+      summary: Invite a co-admin by email
+      description: |
+        Find-or-creates the `Admin` (no password needed — they sign in
+        via `/admin/auth/magic_link`). Idempotent on the
+        (server, admin) pair.
+      security: [{ adminBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, example: coadmin@example.com }
+      responses:
+        "201":
+          description: Adminship created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Adminship" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/servers/{serverId}/admins/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathServerId"
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+        description: Target **Admin id** (not adminship id).
+    delete:
+      operationId: revokeServerAdmin
+      tags: [Admin co-admins]
+      summary: Revoke a co-admin's adminship
+      description: |
+        §17.1 invariant: **a server always has at least one admin**.
+        Removing the last admin returns `422 last_admin`.
+      security: [{ adminBearer: [] }]
+      responses:
+        "204": { description: Adminship removed. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Target has no adminship on this server, or caller doesn't administer it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "422":
+          description: Would leave server with zero admins.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+              examples:
+                last_admin: { value: { error: { code: last_admin, message: "Cannot remove the only remaining admin" } } }
+
+  # ─── Admin invitations ──────────────────────────────────────────────────────
+
+  /admin/servers/{serverId}/invitations:
+    parameters:
+      - $ref: "#/components/parameters/PathServerId"
+    get:
+      operationId: listServerInvitations
+      tags: [Admin invitations]
+      summary: List invite-kind ServerAccess rows
+      security: [{ adminBearer: [] }]
+      responses:
+        "200":
+          description: Invitations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitations]
+                properties:
+                  invitations:
+                    type: array
+                    items: { $ref: "#/components/schemas/Invitation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: createServerInvitation
+      tags: [Admin invitations]
+      summary: Add an invite-kind ServerAccess row
+      description: Idempotent on (server, email).
+      security: [{ adminBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, example: guest@personal.com }
+      responses:
+        "201":
+          description: Invitation created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Invitation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/servers/{serverId}/invitations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathServerId"
+      - $ref: "#/components/parameters/PathId"
+    delete:
+      operationId: deleteServerInvitation
+      tags: [Admin invitations]
+      summary: Remove an invitation
+      description: |
+        Does NOT remove any `ServerMembership` rows the invite
+        previously granted — admission is not retroactive per §16.7.
+      security: [{ adminBearer: [] }]
+      responses:
+        "204": { description: Invitation removed. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ─── Admin members ──────────────────────────────────────────────────────────
+
+  /admin/servers/{serverId}/members:
+    parameters:
+      - $ref: "#/components/parameters/PathServerId"
+    get:
+      operationId: listServerMembers
+      tags: [Admin members]
+      summary: List server memberships
+      description: Real names are visible to admins (§17.1).
+      security: [{ adminBearer: [] }]
+      responses:
+        "200":
+          description: Memberships.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items: { $ref: "#/components/schemas/Member" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+
+components:
+
+  securitySchemes:
+    playerBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Player-scope ApiKey from `POST /auth/exchange`.
+    adminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Admin-scope ApiKey from `POST /admin/auth/exchange`.
+
+  parameters:
+    PathId:
+      in: path
+      name: id
+      required: true
+      schema: { type: integer }
+    PathServerId:
+      in: path
+      name: serverId
+      required: true
+      schema: { type: integer }
+
+  responses:
+    Unauthorized:
+      description: Missing, invalid, or wrong-scope ApiKey.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+          examples:
+            unauthorized: { value: { error: { code: unauthorized, message: "Invalid or missing API key" } } }
+    NotFound:
+      description: Resource does not exist or is not visible to the caller.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    ParamMissing:
+      description: Required parameter absent.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+          examples:
+            param_missing: { value: { error: { code: param_missing, message: "param is missing or the value is empty: email" } } }
+
+  schemas:
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: |
+                Stable code. Known values:
+                `unauthorized`, `invalid_token`, `expired`,
+                `already_consumed`, `forbidden`, `not_found`,
+                `last_admin`, `handle_locked`, `invalid`,
+                `param_missing`.
+              enum:
+                - unauthorized
+                - invalid_token
+                - expired
+                - already_consumed
+                - forbidden
+                - not_found
+                - last_admin
+                - handle_locked
+                - invalid
+                - param_missing
+            message: { type: string }
+            retry_after:
+              type: integer
+              description: Seconds until the caller may retry (rate-limit responses only).
+
+    ExchangeResponse:
+      type: object
+      required: [api_key, expires_at, owner]
+      properties:
+        api_key:
+          type: string
+          description: Raw ApiKey shown ONCE. Persisted only as SHA-256 digest.
+          example: "abc123..."
+        expires_at:
+          type: string
+          format: date-time
+          description: Initial 90-day expiry. Slides forward on each authenticated request.
+        owner:
+          type: object
+          required: [id, email, name, type]
+          properties:
+            id:    { type: integer }
+            email: { type: string, format: email }
+            name:  { type: string }
+            type:
+              type: string
+              enum: [player, admin]
+
+    ApiKeyEntry:
+      type: object
+      required: [id, name, last_used_at, expires_at, revoked_at, current]
+      properties:
+        id:           { type: integer }
+        name:         { type: [string, "null"], description: "Caller-set label e.g. \"laptop\"." }
+        last_used_at: { type: [string, "null"], format: date-time }
+        expires_at:   { type: string, format: date-time }
+        revoked_at:   { type: [string, "null"], format: date-time }
+        current:      { type: boolean, description: "True iff this is the key used to authenticate the current request." }
+
+    ServerSummary:
+      type: object
+      description: Reduced shape returned to players.
+      required: [id, slug, name, member]
+      properties:
+        id:     { type: integer }
+        slug:   { type: string }
+        name:   { type: string }
+        member: { type: boolean }
+
+    Server:
+      type: object
+      description: Full shape returned to admins.
+      required: [id, slug, name, max_concurrent_worlds, max_worlds_per_account, owner_admin_id]
+      properties:
+        id:                     { type: integer }
+        slug:                   { type: string }
+        name:                   { type: string }
+        max_concurrent_worlds:  { type: integer }
+        max_worlds_per_account: { type: integer }
+        owner_admin_id:         { type: integer }
+
+    Adminship:
+      type: object
+      required: [adminship_id, admin, role, granted_by_admin_id, joined_at]
+      properties:
+        adminship_id: { type: integer }
+        admin:
+          type: object
+          required: [id, email, name]
+          properties:
+            id:    { type: integer }
+            email: { type: string, format: email }
+            name:  { type: string }
+        role:
+          type: string
+          enum: [owner, admin]
+        granted_by_admin_id: { type: [integer, "null"] }
+        joined_at:           { type: string, format: date-time }
+
+    Invitation:
+      type: object
+      required: [id, email, created_at]
+      properties:
+        id:         { type: integer }
+        email:      { type: string, format: email }
+        created_at: { type: string, format: date-time }
+
+    Member:
+      type: object
+      required: [membership_id, player, joined_at]
+      properties:
+        membership_id: { type: integer }
+        player:
+          type: object
+          required: [id, email, name]
+          properties:
+            id:    { type: integer }
+            email: { type: string, format: email }
+            name:  { type: string }
+        joined_at: { type: string, format: date-time }
+
+    PlayerProfileWrite:
+      type: object
+      description: Returned by `PATCH /servers/{id}/me`.
+      required: [handle, real_name, stats]
+      properties:
+        handle:    { type: [string, "null"] }
+        real_name: { type: [string, "null"] }
+        stats:
+          type: object
+          additionalProperties: true
+
+    PlayerProfileRead:
+      type: object
+      description: Returned by `GET /servers/{serverId}/players/{handle}`.
+      required: [handle, real_name, stats, joined_at]
+      properties:
+        handle:    { type: string }
+        real_name: { type: [string, "null"] }
+        stats:
+          type: object
+          additionalProperties: true
+        joined_at: { type: string, format: date-time }
