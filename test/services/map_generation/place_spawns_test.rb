@@ -4,7 +4,7 @@ module MapGeneration
   class PlaceSpawnsTest < ActiveSupport::TestCase
     # Seeds chosen empirically to land at least the player-count in spawn slots.
     GOOD_SEEDS = {
-      4  => "0000000000000fe4",
+      4  => "0000000000000034",
       8  => "0000000000001fd9",
       12 => "0000000000002f35",
       16 => "0000000000003fc3"

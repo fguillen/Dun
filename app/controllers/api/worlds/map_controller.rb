@@ -2,7 +2,7 @@ module Api
   module Worlds
     class MapController < Api::BaseController
       def index
-        regions = world.regions.includes(:nodes, :ruin).order(:id)
+        regions = world.regions.includes(:nodes, :ruin).order(:name)
         adjacency = build_adjacency(regions)
         my_spawn_id = my_kingdoms_spawn_id
 

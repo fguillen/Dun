@@ -31,8 +31,8 @@ module MapGeneration
       Generate.call(world: a, players_count: 12)
       Generate.call(world: b, players_count: 12)
 
-      a_signature = a.reload.regions.order(:id).map { |r| [ r.name, r.terrain, r.spawn_eligible, r.position ] }
-      b_signature = b.reload.regions.order(:id).map { |r| [ r.name, r.terrain, r.spawn_eligible, r.position ] }
+      a_signature = a.reload.regions.order(:name).map { |r| [ r.name, r.terrain, r.spawn_eligible, r.position ] }
+      b_signature = b.reload.regions.order(:name).map { |r| [ r.name, r.terrain, r.spawn_eligible, r.position ] }
       assert_equal a_signature, b_signature
     end
   end

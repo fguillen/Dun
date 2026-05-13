@@ -91,6 +91,7 @@ module MapGeneration
       now = Time.current
       rows = points.each_with_index.map do |(x, y), i|
         {
+          id: ULID.generate,
           world_id: @world.id,
           name: names[i],
           terrain: "plains",
@@ -102,14 +103,16 @@ module MapGeneration
         }
       end
       Region.insert_all!(rows)
-      @world.regions.order(:id).to_a
+      ids = rows.map { |r| r[:id] }
+      by_id = Region.where(id: ids).index_by(&:id)
+      ids.map { |id| by_id.fetch(id) }
     end
 
     def persist_adjacencies(regions, edges)
       now = Time.current
       rows = edges.map do |i, j|
         ra, rb = [ regions[i].id, regions[j].id ].sort
-        { region_a_id: ra, region_b_id: rb, created_at: now, updated_at: now }
+        { id: ULID.generate, region_a_id: ra, region_b_id: rb, created_at: now, updated_at: now }
       end
       RegionAdjacency.insert_all!(rows) if rows.any?
       RegionAdjacency.where(region_a_id: regions.map(&:id)).to_a

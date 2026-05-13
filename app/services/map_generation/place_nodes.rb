@@ -27,7 +27,7 @@ module MapGeneration
       tiers.shuffle!(random: @rng)
       resources.shuffle!(random: @rng)
 
-      all_regions = @world.regions.order(:id).to_a
+      all_regions = @world.regions.order(:name).to_a
       spawn_ids = all_regions.select(&:spawn_eligible).map(&:id).to_set
       spawn_adjacent_ids = compute_spawn_adjacent_ids(all_regions, spawn_ids)
       eligible = all_regions.reject { |r| spawn_ids.include?(r.id) }
@@ -96,6 +96,7 @@ module MapGeneration
     def build_row(region, resource, tier)
       now = Time.current
       {
+        id: ULID.generate,
         region_id: region.id,
         resource: resource,
         tier: tier,

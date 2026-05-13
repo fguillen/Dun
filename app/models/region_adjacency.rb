@@ -10,7 +10,7 @@ class RegionAdjacency < ApplicationRecord
   validate :same_world
 
   def self.connect(a, b)
-    a_id, b_id = [ a.is_a?(Region) ? a.id : a.to_i, b.is_a?(Region) ? b.id : b.to_i ].sort
+    a_id, b_id = [ a.is_a?(Region) ? a.id : a, b.is_a?(Region) ? b.id : b ].sort
     find_or_create_by!(region_a_id: a_id, region_b_id: b_id)
   end
 

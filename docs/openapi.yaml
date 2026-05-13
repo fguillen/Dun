@@ -259,7 +259,7 @@ paths:
                 type: object
                 required: [membership_id, server]
                 properties:
-                  membership_id: { type: integer }
+                  membership_id: { type: string }
                   server: { $ref: "#/components/schemas/ServerSummary" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -326,7 +326,7 @@ paths:
       - in: path
         name: serverId
         required: true
-        schema: { type: integer }
+        schema: { type: string }
       - in: path
         name: handle
         required: true
@@ -602,7 +602,7 @@ paths:
       - in: path
         name: id
         required: true
-        schema: { type: integer }
+        schema: { type: string }
         description: Target **Admin id** (not adminship id).
     delete:
       operationId: revokeServerAdmin
@@ -801,7 +801,7 @@ paths:
       - in: path
         name: world_id
         required: true
-        schema: { type: integer }
+        schema: { type: string }
       - $ref: "#/components/parameters/PathId"
     get:
       operationId: showRegion
@@ -822,7 +822,7 @@ paths:
       - in: path
         name: world_id
         required: true
-        schema: { type: integer }
+        schema: { type: string }
       - $ref: "#/components/parameters/PathId"
     get:
       operationId: showRegionAdjacent
@@ -844,7 +844,7 @@ paths:
                       type: object
                       required: [id, name, terrain]
                       properties:
-                        id: { type: integer }
+                        id: { type: string }
                         name: { type: string }
                         terrain: { type: string, enum: [plains, forest, hills, mountain, marsh] }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -855,7 +855,7 @@ paths:
       - in: path
         name: world_id
         required: true
-        schema: { type: integer }
+        schema: { type: string }
     get:
       operationId: listRuins
       tags: [Player worlds]
@@ -1015,7 +1015,7 @@ paths:
       - in: path
         name: world_id
         required: true
-        schema: { type: integer }
+        schema: { type: string }
     get:
       operationId: listWorldInvitations
       tags: [Admin world invitations]
@@ -1064,7 +1064,7 @@ paths:
       - in: path
         name: world_id
         required: true
-        schema: { type: integer }
+        schema: { type: string }
       - $ref: "#/components/parameters/PathId"
     delete:
       operationId: deleteWorldInvitation
@@ -1097,12 +1097,12 @@ components:
       in: path
       name: id
       required: true
-      schema: { type: integer }
+      schema: { type: string, description: "ULID (26 chars, Crockford base-32)." }
     PathServerId:
       in: path
       name: serverId
       required: true
-      schema: { type: integer }
+      schema: { type: string, description: "ULID (26 chars, Crockford base-32)." }
 
   responses:
     Unauthorized:
@@ -1180,7 +1180,7 @@ components:
           type: object
           required: [id, email, name, type]
           properties:
-            id:    { type: integer }
+            id:    { type: string }
             email: { type: string, format: email }
             name:  { type: string }
             type:
@@ -1191,7 +1191,7 @@ components:
       type: object
       required: [id, name, last_used_at, expires_at, revoked_at, current]
       properties:
-        id:           { type: integer }
+        id:           { type: string }
         name:         { type: [string, "null"], description: "Caller-set label e.g. \"laptop\"." }
         last_used_at: { type: [string, "null"], format: date-time }
         expires_at:   { type: string, format: date-time }
@@ -1203,7 +1203,7 @@ components:
       description: Reduced shape returned to players.
       required: [id, slug, name, member]
       properties:
-        id:     { type: integer }
+        id:     { type: string }
         slug:   { type: string }
         name:   { type: string }
         member: { type: boolean }
@@ -1213,36 +1213,36 @@ components:
       description: Full shape returned to admins.
       required: [id, slug, name, max_concurrent_worlds, max_worlds_per_account, owner_admin_id]
       properties:
-        id:                     { type: integer }
+        id:                     { type: string }
         slug:                   { type: string }
         name:                   { type: string }
         max_concurrent_worlds:  { type: integer }
         max_worlds_per_account: { type: integer }
-        owner_admin_id:         { type: integer }
+        owner_admin_id:         { type: string }
 
     Adminship:
       type: object
       required: [adminship_id, admin, role, granted_by_admin_id, joined_at]
       properties:
-        adminship_id: { type: integer }
+        adminship_id: { type: string }
         admin:
           type: object
           required: [id, email, name]
           properties:
-            id:    { type: integer }
+            id:    { type: string }
             email: { type: string, format: email }
             name:  { type: string }
         role:
           type: string
           enum: [owner, admin]
-        granted_by_admin_id: { type: [integer, "null"] }
+        granted_by_admin_id: { type: [string, "null"] }
         joined_at:           { type: string, format: date-time }
 
     Invitation:
       type: object
       required: [id, email, created_at]
       properties:
-        id:         { type: integer }
+        id:         { type: string }
         email:      { type: string, format: email }
         created_at: { type: string, format: date-time }
 
@@ -1250,12 +1250,12 @@ components:
       type: object
       required: [membership_id, player, joined_at]
       properties:
-        membership_id: { type: integer }
+        membership_id: { type: string }
         player:
           type: object
           required: [id, email, name]
           properties:
-            id:    { type: integer }
+            id:    { type: string }
             email: { type: string, format: email }
             name:  { type: string }
         joined_at: { type: string, format: date-time }
@@ -1290,8 +1290,8 @@ components:
       description: Player-side world summary; `my_kingdom` is present iff the caller has joined.
       required: [id, server_id, name, slug, status, min_players, t0_at, region_count, kingdom_count]
       properties:
-        id: { type: integer }
-        server_id: { type: integer }
+        id: { type: string }
+        server_id: { type: string }
         name: { type: string }
         slug: { type: string }
         status: { type: string, enum: [proposed, grace, active, archived, cancelled] }
@@ -1307,8 +1307,8 @@ components:
       description: Admin-side world detail (includes seed, lifecycle timestamps, wonder metadata).
       required: [id, server_id, name, slug, status, seed, min_players, auto_cancel_after_hours, t0_at]
       properties:
-        id: { type: integer }
-        server_id: { type: integer }
+        id: { type: string }
+        server_id: { type: string }
         name: { type: string }
         slug: { type: string }
         seed: { type: string }
@@ -1325,10 +1325,10 @@ components:
       type: object
       required: [id, world_id, stockpiles, joined_at]
       properties:
-        id: { type: integer }
-        world_id: { type: integer }
+        id: { type: string }
+        world_id: { type: string }
         home_region_id:
-          type: [integer, "null"]
+          type: [string, "null"]
           description: Nil while the world is `proposed`; assigned at `Worlds::Start` or at join during `grace`.
         stockpiles:
           type: object
@@ -1348,7 +1348,7 @@ components:
       type: object
       required: [id, resource, tier, is_home_hoard]
       properties:
-        id: { type: integer }
+        id: { type: string }
         resource: { type: string, enum: [gold, wood, stone, iron] }
         tier: { type: string, enum: [poor, standard, rich] }
         is_home_hoard: { type: boolean }
@@ -1359,13 +1359,13 @@ components:
         - type: object
           properties:
             base_rate: { type: integer }
-            owner_kingdom_id: { type: [integer, "null"] }
+            owner_kingdom_id: { type: [string, "null"] }
 
     RuinSummary:
       type: object
       required: [id, tier, claimed]
       properties:
-        id: { type: integer }
+        id: { type: string }
         tier: { type: string, enum: [minor, standard, major] }
         claimed: { type: boolean }
 
@@ -1373,8 +1373,8 @@ components:
       type: object
       required: [id, region_id, region_name, tier, garrison, cache, claimed]
       properties:
-        id: { type: integer }
-        region_id: { type: integer }
+        id: { type: string }
+        region_id: { type: string }
         region_name: { type: string }
         tier: { type: string, enum: [minor, standard, major] }
         garrison:
@@ -1384,14 +1384,14 @@ components:
           type: object
           additionalProperties: { type: integer }
         claimed: { type: boolean }
-        claimed_by_kingdom_id: { type: [integer, "null"] }
+        claimed_by_kingdom_id: { type: [string, "null"] }
         claimed_at: { type: [string, "null"], format: date-time }
 
     RegionSummary:
       type: object
       required: [id, name, terrain, position, adjacency, nodes]
       properties:
-        id: { type: integer }
+        id: { type: string }
         name: { type: string }
         terrain: { type: string, enum: [plains, forest, hills, mountain, marsh] }
         position: { $ref: "#/components/schemas/Position" }
@@ -1400,7 +1400,7 @@ components:
         your_spawn: { type: boolean }
         adjacency:
           type: array
-          items: { type: integer }
+          items: { type: string }
         nodes:
           type: array
           items: { $ref: "#/components/schemas/NodeSummary" }
@@ -1413,7 +1413,7 @@ components:
       type: object
       required: [id, name, terrain, position, adjacency, nodes]
       properties:
-        id: { type: integer }
+        id: { type: string }
         name: { type: string }
         terrain: { type: string, enum: [plains, forest, hills, mountain, marsh] }
         position: { $ref: "#/components/schemas/Position" }
@@ -1421,7 +1421,7 @@ components:
         spawn_eligible: { type: boolean }
         adjacency:
           type: array
-          items: { type: integer }
+          items: { type: string }
         nodes:
           type: array
           items: { $ref: "#/components/schemas/Node" }
@@ -1429,14 +1429,14 @@ components:
           oneOf:
             - { $ref: "#/components/schemas/Ruin" }
             - { type: "null" }
-        owner_kingdom_id: { type: [integer, "null"] }
+        owner_kingdom_id: { type: [string, "null"] }
 
     WorldInvitation:
       type: object
       description: Informational record only — does NOT gate world admission.
       required: [id, email, invited_by_admin_id, created_at]
       properties:
-        id: { type: integer }
+        id: { type: string }
         email: { type: string, format: email }
-        invited_by_admin_id: { type: integer }
+        invited_by_admin_id: { type: string }
         created_at: { type: string, format: date-time }

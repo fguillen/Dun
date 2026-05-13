@@ -1,7 +1,7 @@
 class CreateWorlds < ActiveRecord::Migration[8.1]
   def change
-    create_table :worlds do |t|
-      t.references :server, null: false, foreign_key: true
+    create_table :worlds, id: :string do |t|
+      t.references :server, null: false, foreign_key: true, type: :string
       t.string :name, null: false
       t.citext :slug, null: false
       t.string :seed, null: false

@@ -40,7 +40,7 @@ module MapGeneration
       available = @world.regions.where(spawn_eligible: true).where.not(id: claimed_ids).to_a
       return nil if available.empty?
 
-      rng = Random.new(@world.seed_int ^ @profile.id)
+      rng = Random.new(@world.seed_int ^ Zlib.crc32(@profile.id))
       available.shuffle(random: rng).first
     end
   end

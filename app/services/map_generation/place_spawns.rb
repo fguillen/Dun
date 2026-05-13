@@ -23,7 +23,7 @@ module MapGeneration
     end
 
     def call
-      regions = @world.regions.order(:id).to_a
+      regions = @world.regions.order(:name).to_a
       adjacency = build_adjacency_map(regions)
       degree = adjacency.transform_values(&:size)
 
@@ -160,6 +160,7 @@ module MapGeneration
       rows = spawns.map do |spawn|
         resource = pick_home_hoard_resource(spawn, adjacency)
         {
+          id: ULID.generate,
           region_id: spawn.id,
           resource: resource,
           tier: "standard",

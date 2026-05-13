@@ -16,7 +16,7 @@ module MapGeneration
 
     def call
       target_count = [ 2, (@players_count / 4.0).round ].max
-      regions = @world.regions.includes(:nodes).order(:id).to_a
+      regions = @world.regions.includes(:nodes).order(:name).to_a
       adjacency = build_adjacency_map(regions)
       spawn_ids = regions.select(&:spawn_eligible).map(&:id).to_set
       node_region_ids = @world.nodes.distinct.pluck(:region_id).to_set
@@ -36,6 +36,7 @@ module MapGeneration
       rows = placed.each_with_index.map do |region, i|
         tier = tiers[i]
         {
+          id: ULID.generate,
           region_id: region.id,
           tier: tier,
           garrison: Ruin::GARRISONS[tier],

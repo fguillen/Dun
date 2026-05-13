@@ -32,6 +32,9 @@ gem "pagy", "~> 9.0"
 # Data-only migrations alongside schema migrations
 gem "data_migrate"
 
+# ULID generation for string primary keys
+gem "ulid"
+
 # Structured single-line JSON request logs
 gem "lograge"
 

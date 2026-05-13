@@ -19,7 +19,7 @@ module MapGeneration
     end
 
     test "share of each terrain is within \u00b110pp of the target" do
-      world = build_world(players: 24)
+      world = build_world(seed: "0000000000000000", players: 24)
       AssignTerrain.call(world: world, rng: Random.new(world.seed_int))
       world.reload
       total = world.regions.count.to_f
@@ -40,8 +40,8 @@ module MapGeneration
       BuildGraph.call(world: world_b, players_count: 12, rng: rng_b)
       AssignTerrain.call(world: world_b, rng: rng_b)
 
-      terrains_a = world_a.regions.order(:id).pluck(:terrain)
-      terrains_b = world_b.regions.order(:id).pluck(:terrain)
+      terrains_a = world_a.regions.order(:name).pluck(:terrain)
+      terrains_b = world_b.regions.order(:name).pluck(:terrain)
       assert_equal terrains_a, terrains_b
     end
   end

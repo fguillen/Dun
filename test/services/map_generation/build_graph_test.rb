@@ -49,8 +49,8 @@ module MapGeneration
       BuildGraph.call(world: world_a, players_count: 8, rng: Random.new(world_a.seed_int))
       BuildGraph.call(world: world_b, players_count: 8, rng: Random.new(world_b.seed_int))
 
-      positions_a = world_a.regions.order(:id).map { |r| [ r.name, r.position["x"], r.position["y"] ] }
-      positions_b = world_b.regions.order(:id).map { |r| [ r.name, r.position["x"], r.position["y"] ] }
+      positions_a = world_a.regions.order(:name).map { |r| [ r.name, r.position["x"], r.position["y"] ] }
+      positions_b = world_b.regions.order(:name).map { |r| [ r.name, r.position["x"], r.position["y"] ] }
       assert_equal positions_a, positions_b
 
       edges_a = RegionAdjacency.where(region_a_id: world_a.regions.select(:id)).pluck(:region_a_id, :region_b_id).sort

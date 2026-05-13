@@ -18,7 +18,7 @@ module MapGeneration
     end
 
     def call
-      regions = @world.regions.order(:id).to_a
+      regions = @world.regions.order(:name).to_a
       total = regions.size
 
       seed_terrains = build_seed_pool(total)
