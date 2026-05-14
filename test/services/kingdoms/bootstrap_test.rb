@@ -34,7 +34,21 @@ module Kingdoms
       assert_equal 1, kingdom.metadata.dig("starter_buildings", "barracks")
       assert_equal 1, kingdom.metadata.dig("starter_buildings", "walls")
       assert_equal 1, kingdom.metadata.dig("starter_buildings", "watchtower")
+      assert_equal 1, kingdom.metadata.dig("starter_buildings", "quarry")
       assert_equal 20, kingdom.metadata["starter_levy"]
+    end
+
+    test "materializes all 12 Building rows with starter levels" do
+      kingdom = create(:kingdom)
+      Kingdoms::Bootstrap.call(kingdom, hours_since_t0: 0)
+
+      assert_equal Buildings::Catalog::KINDS.sort, kingdom.buildings.pluck(:kind).sort
+
+      assert_equal 1, kingdom.buildings.find_by(kind: "quarry").level
+      assert_equal 1, kingdom.buildings.find_by(kind: "barracks").level
+      assert_equal 0, kingdom.buildings.find_by(kind: "warehouse").level
+      assert_equal 0, kingdom.buildings.find_by(kind: "town_hall").level
+      assert_equal 0, kingdom.buildings.find_by(kind: "stone_mason").level
     end
 
     test "stockpile_at writes a checkpoint timestamp" do

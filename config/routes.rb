@@ -34,6 +34,13 @@ Rails.application.routes.draw do
       end
     end
 
+    resources :kingdoms, only: %i[show] do
+      member { post :build }
+      scope module: :kingdoms do
+        resources :build_orders, only: %i[destroy], path: "build"
+      end
+    end
+
     namespace :admin do
       scope module: :auth do
         post   "auth/magic_link" => "magic_links#create",  as: :auth_magic_link

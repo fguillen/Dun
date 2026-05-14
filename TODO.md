@@ -164,36 +164,37 @@ Implements `§13` (round trigger), `§16.5` (map gen), `§16.8` (spawn), `§16.1
 Implements `§6`, `§7`, `§10`, `§16.4`.
 
 ### Models
-- [ ] `Building` (kingdom_id, kind enum [12 types], level, position) — one row per building per kingdom
-- [ ] `BuildOrder` (kingdom_id, building_id, target_level, started_at, completes_at, cancelled_at)
-- [ ] Stockpile state lives on `Kingdom.stockpiles` jsonb (G/W/S/I + per-resource last_checkpoint_at)
+- [x] `Building` (kingdom_id, kind enum [12 types], level, position) — one row per building per kingdom
+- [x] `BuildOrder` (kingdom_id, building_id, target_level, started_at, completes_at, cancelled_at, completed_at)
+- [x] Stockpile state lives on `Kingdom.stockpiles` jsonb (G/W/S/I + single `checkpoint_at`)
 
 ### Services / domain
-- [ ] `Buildings::CostFor.call(kind, level)` — `base × 1.75^(L-1)` per `§16.4`
-- [ ] `Buildings::TimeFor.call(kind, level, kingdom:)` — `min(base_time × 1.55^(L-1), 24h)` then apply Stone Mason discount (capped −30%) per `§16.4`
-- [ ] `Buildings::Queue.call(kingdom, building, ...)` — validates tier gates (`§10`/`§16.4`), single-slot rule (Town Hall L10/L20 unlocks more), deducts cost
-- [ ] `Buildings::Cancel.call(build_order)` — 75% refund, time lost
-- [ ] `Buildings::Complete.call(build_order)` — applies level bump, retroactive recalc of in-progress on Stone Mason completion
-- [ ] `Stockpile::Apply.call(kingdom, deltas)` — atomic, enforces Warehouse cap
-- [ ] `Stockpile::Read.call(kingdom)` — lazy materialization: `last_checkpoint + elapsed × rate`, capped at warehouse limit
-- [ ] `Production::RateFor.call(kingdom, resource)` — sum of `base × level` + node bonuses
+- [x] `Buildings::CostFor.call(kind, level)` — `round(base × 1.75^(L-1))` per `§16.4`
+- [x] `Buildings::TimeFor.call(kind, level, kingdom:)` — `min(base_time × 1.55^(L-1), 24h)` then apply Stone Mason discount (capped −30%) per `§16.4`
+- [x] `Buildings::Queue.call(kingdom, kind:, target_level:)` — validates tier gates (`§10`/`§16.4`), single-slot rule (Town Hall L10/L20 unlocks more), deducts cost, idempotent retry
+- [x] `Buildings::Cancel.call(build_order)` — 75% refund (floored), time lost
+- [x] `Buildings::Complete.call(build_order)` — applies level bump, retroactive recalc of in-progress on Stone Mason completion, idempotent
+- [x] `Buildings::ResolveCompletions.call(kingdom)` — drains ripe orders in `completes_at` order (also called proactively by Phase 4 tick)
+- [x] `Stockpile::Apply.call(kingdom:, deltas:)` — atomic (row-lock), enforces Warehouse cap, raises `InsufficientResources`
+- [x] `Stockpile::Read.call(kingdom)` — pure compute: `last_checkpoint + elapsed × rate`, capped at warehouse limit
+- [x] `Production::RateFor.call(kingdom:, resource:)` — `base × level + node bonuses`
 
 ### Tick integration (Phase 4 owns the scheduler; building hooks live here)
-- [ ] Build completions resolved in `DiscreteEventTick`
-- [ ] Stockpile checkpoint flushed in `ProductionCheckpoint` (1 min)
+- [ ] Build completions resolved in `DiscreteEventTick` (Phase 3 resolves lazily on read via `Buildings::ResolveCompletions`)
+- [ ] Stockpile checkpoint flushed in `ProductionCheckpoint` (1 min) (Phase 3 reads lazily via `Stockpile::Read`)
 
 ### API endpoints
-- [ ] `GET  /v1/kingdoms/:id` (status: resources, production, queue)
-- [ ] `POST /v1/kingdoms/:id/build` — `{building, target_level}`
-- [ ] `DELETE /v1/kingdoms/:id/build/:order_id`
+- [x] `GET  /v1/kingdoms/:id` (status: resources, production, queue)
+- [x] `POST /v1/kingdoms/:id/build` — `{building, target_level}`
+- [x] `DELETE /v1/kingdoms/:id/build/:order_id`
 
 ### Tests
-- [ ] Cost & time formulas at L1, L5, L10, L15, L20 against table in `§16.4`
-- [ ] Tier gate enforcement (Stable requires Barracks 3, etc.)
-- [ ] Single-slot rule; Town Hall L10 unlocks +1 slot
-- [ ] Cancel refund = 75% resources, 0% time
-- [ ] Stone Mason retroactive recalc applies to in-progress builds, not unit training, not Wonder
-- [ ] Production hard-stops at Warehouse cap (per `§16.4` open follow-up: hard stop)
+- [x] Cost & time formulas at L1, L5, L10, L15, L20 against table in `§16.4`
+- [x] Tier gate enforcement (Stable requires Barracks 3, etc.)
+- [x] Single-slot rule; Town Hall L10/L20 unlocks more slots
+- [x] Cancel refund = 75% resources, 0% time
+- [x] Stone Mason retroactive recalc applies to in-progress builds (unit training / Wonder not yet shipped)
+- [x] Production hard-stops at Warehouse cap (per `§16.4` open follow-up: hard stop)
 
 ---
 

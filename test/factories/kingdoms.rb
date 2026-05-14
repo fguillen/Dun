@@ -14,5 +14,14 @@ FactoryBot.define do
       world  { create(:world, server: server) }
       home_region { nil }
     end
+
+    trait :with_buildings do
+      after(:create) do |kingdom|
+        Buildings::Catalog::KINDS.each do |kind|
+          level = Buildings::Catalog::STARTER_LEVELS.fetch(kind, 0)
+          kingdom.buildings.find_or_create_by!(kind: kind) { |b| b.level = level }
+        end
+      end
+    end
   end
 end

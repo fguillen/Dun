@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_13_120003) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_14_100001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -35,6 +35,33 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_120003) do
     t.datetime "updated_at", null: false
     t.index ["owner_type", "owner_id"], name: "index_api_keys_on_owner_type_and_owner_id"
     t.index ["token_digest"], name: "index_api_keys_on_token_digest", unique: true
+  end
+
+  create_table "build_orders", id: :string, force: :cascade do |t|
+    t.string "building_id", null: false
+    t.datetime "cancelled_at"
+    t.datetime "completed_at"
+    t.datetime "completes_at", null: false
+    t.datetime "created_at", null: false
+    t.string "kingdom_id", null: false
+    t.datetime "started_at", null: false
+    t.integer "target_level", null: false
+    t.datetime "updated_at", null: false
+    t.index ["building_id"], name: "index_build_orders_on_building_id"
+    t.index ["completes_at"], name: "index_build_orders_on_completes_at"
+    t.index ["kingdom_id"], name: "index_build_orders_on_kingdom_id"
+    t.index ["kingdom_id"], name: "index_build_orders_on_kingdom_id_unresolved", where: "((completed_at IS NULL) AND (cancelled_at IS NULL))"
+  end
+
+  create_table "buildings", id: :string, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "kind", null: false
+    t.string "kingdom_id", null: false
+    t.integer "level", default: 0, null: false
+    t.jsonb "position"
+    t.datetime "updated_at", null: false
+    t.index ["kingdom_id", "kind"], name: "index_buildings_on_kingdom_id_and_kind", unique: true
+    t.index ["kingdom_id"], name: "index_buildings_on_kingdom_id"
   end
 
   create_table "kingdoms", id: :string, force: :cascade do |t|
@@ -221,6 +248,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_120003) do
     t.index ["winner_kingdom_id"], name: "index_worlds_on_winner_kingdom_id"
   end
 
+  add_foreign_key "build_orders", "buildings"
+  add_foreign_key "build_orders", "kingdoms"
+  add_foreign_key "buildings", "kingdoms"
   add_foreign_key "kingdoms", "player_profiles"
   add_foreign_key "kingdoms", "regions", column: "home_region_id"
   add_foreign_key "kingdoms", "worlds"

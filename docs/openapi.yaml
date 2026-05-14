@@ -74,6 +74,8 @@ tags:
     description: Admin propose/configure/cancel for worlds on administered servers.
   - name: Admin world invitations
     description: Informational invitations attached to a world; do NOT gate admission (server access still rules).
+  - name: Player kingdoms
+    description: Per-kingdom dashboard, building queue, and stockpile reads (§6, §10, §16.4).
 
 security: []   # endpoints declare their own security requirements
 
@@ -876,6 +878,108 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # ─── Phase 3: player kingdoms (buildings + stockpile) ──────────────────────
+
+  /kingdoms/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: showKingdom
+      tags: [Player kingdoms]
+      summary: Show the caller's kingdom dashboard
+      description: |
+        Returns materialized stockpiles (lazily accrued from the last checkpoint
+        against current production rates and Warehouse cap), production rates,
+        buildings, and any in-progress build orders. Ripe build orders are
+        resolved before serializing.
+
+        Non-owners receive `404` (existence is not disclosed).
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Kingdom detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KingdomDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /kingdoms/{id}/build:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      operationId: queueBuildOrder
+      tags: [Player kingdoms]
+      summary: Queue a building upgrade
+      description: |
+        `target_level` must equal the building's current level + 1 (defensive
+        concurrency check). Resource cost is deducted via `Stockpile::Apply`
+        immediately. Time = `min(base × 1.55^(L-1), 24h)` × Stone Mason discount.
+
+        Idempotent retry: if an identical in-progress order already exists for
+        the same `building` + `target_level`, returns it without re-deducting.
+      security: [{ playerBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [building, target_level]
+              properties:
+                building:
+                  type: string
+                  enum:
+                    [ town_hall, gold_mint, lumber_camp, quarry, iron_mine,
+                      warehouse, barracks, stable, siege_workshop, walls,
+                      watchtower, stone_mason ]
+                target_level: { type: integer, minimum: 1, maximum: 20 }
+      responses:
+        "201":
+          description: Build order created (or returned, if idempotent).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BuildOrder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            `unknown_building`, `world_not_buildable`, `kingdom_eliminated`,
+            `invalid_target_level`, `tier_gate_unmet`, `queue_full`, or
+            `insufficient_resources`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /kingdoms/{kingdom_id}/build/{id}:
+    parameters:
+      - in: path
+        name: kingdom_id
+        required: true
+        schema: { type: string }
+      - $ref: "#/components/parameters/PathId"
+    delete:
+      operationId: cancelBuildOrder
+      tags: [Player kingdoms]
+      summary: Cancel an in-progress build order
+      description: |
+        Refunds 75% of resources (floored, applied via `Stockpile::Apply`).
+        Elapsed time is lost. The build slot is freed immediately.
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Build order cancelled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BuildOrder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`build_order_already_resolved`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
   # ─── Admin worlds ───────────────────────────────────────────────────────────
 
   /admin/servers/{server_id}/worlds:
@@ -1440,3 +1544,75 @@ components:
         email: { type: string, format: email }
         invited_by_admin_id: { type: string }
         created_at: { type: string, format: date-time }
+
+    # ─── Phase 3: buildings + build orders ───────────────────────────────────
+
+    Building:
+      type: object
+      required: [id, kind, level]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum:
+            [ town_hall, gold_mint, lumber_camp, quarry, iron_mine, warehouse,
+              barracks, stable, siege_workshop, walls, watchtower, stone_mason ]
+        level: { type: integer, minimum: 0, maximum: 20 }
+
+    BuildOrder:
+      type: object
+      required: [id, building_id, kind, target_level, started_at, completes_at]
+      properties:
+        id: { type: string }
+        building_id: { type: string }
+        kind:
+          type: string
+          enum:
+            [ town_hall, gold_mint, lumber_camp, quarry, iron_mine, warehouse,
+              barracks, stable, siege_workshop, walls, watchtower, stone_mason ]
+        target_level: { type: integer, minimum: 1, maximum: 20 }
+        started_at: { type: string, format: date-time }
+        completes_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        cancelled_at: { type: [string, "null"], format: date-time }
+
+    StockpileMap:
+      type: object
+      description: Per-resource integer amounts after lazy accrual against current rates and Warehouse cap.
+      required: [gold, wood, stone, iron]
+      properties:
+        gold: { type: integer }
+        wood: { type: integer }
+        stone: { type: integer }
+        iron: { type: integer }
+
+    ProductionRates:
+      type: object
+      description: Per-resource units/hour from buildings + owned nodes.
+      required: [gold, wood, stone, iron]
+      properties:
+        gold: { type: integer }
+        wood: { type: integer }
+        stone: { type: integer }
+        iron: { type: integer }
+
+    KingdomDetail:
+      type: object
+      required:
+        [ id, world_id, stockpiles, warehouse_cap, production_rates,
+          joined_at, buildings, in_progress_builds ]
+      properties:
+        id: { type: string }
+        world_id: { type: string }
+        home_region_id: { type: [string, "null"] }
+        stockpiles: { $ref: "#/components/schemas/StockpileMap" }
+        warehouse_cap: { type: integer }
+        production_rates: { $ref: "#/components/schemas/ProductionRates" }
+        joined_at: { type: string, format: date-time }
+        eliminated_at: { type: [string, "null"], format: date-time }
+        buildings:
+          type: array
+          items: { $ref: "#/components/schemas/Building" }
+        in_progress_builds:
+          type: array
+          items: { $ref: "#/components/schemas/BuildOrder" }
