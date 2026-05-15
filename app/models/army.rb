@@ -7,6 +7,7 @@ class Army < ApplicationRecord
   belongs_to :kingdom
   belongs_to :location_region, class_name: "Region"
   has_many :march_orders, dependent: :destroy
+  has_many :battle_participants, dependent: :nullify
 
   validates :name, presence: true, length: { maximum: 60 },
                    uniqueness: { scope: :kingdom_id, case_sensitive: false }

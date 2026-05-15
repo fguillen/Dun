@@ -6,6 +6,7 @@ class MarchOrder < ApplicationRecord
   belongs_to :army
   belongs_to :origin_region, class_name: "Region"
   belongs_to :target_region, class_name: "Region"
+  has_many :battles, dependent: :nullify
 
   validates :intent, inclusion: { in: INTENTS }
   validates :dispatched_at, :arrives_at, presence: true
