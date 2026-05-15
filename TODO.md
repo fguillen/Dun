@@ -258,35 +258,35 @@ Implements `§9`, `§16.3` unit stats, march mechanics, `§16.10` terrain effect
 Implements `§9`, `§16.3` combat rules.
 
 ### Models
-- [ ] `Battle` (world_id, region_id, attacker_kingdom_id, defender_kingdom_id, started_at, ended_at, outcome, loot jsonb, log jsonb)
-- [ ] `BattleParticipant` (battle_id, kingdom_id, side, starting_composition jsonb, ending_composition jsonb, casualties jsonb)
+- [x] `Battle` (world_id, region_id, attacker_kingdom_id, defender_kingdom_id, started_at, ended_at, outcome, loot jsonb, log jsonb)
+- [x] `BattleParticipant` (battle_id, kingdom_id, side, starting_composition jsonb, ending_composition jsonb, casualties jsonb)
 
 ### Services
-- [ ] `Combat::Resolve.call(attacker_army, defender_army, region)` — 6-round sim per `§16.3`:
-  1. Total Atk with RPS multipliers (Knight>Archer 1.5x, Pikeman>Knight 1.6x, Archer>Pikeman 1.4x, Catapult>Walls 3.0x, Trebuchet>Wonder 50 HP/unit)
+- [x] `Combat::Resolve.call(attacker_army, defender_army, region)` — 6-round sim per `§16.3`:
+  1. Total Atk with RPS multipliers (Knight>Archer 1.5x, Pikeman>Knight 1.6x, Archer>Pikeman 1.4x, Catapult>Walls 3.0x via a separate wall-damage stream; Trebuchet>Wonder deferred to Phase 9)
   2. Total Def
   3. Damage = `max(0, Atk − Def × 0.5) × uniform(0.92, 1.08)`
   4. Damage distributed proportionally weighted by inverse-HP (chaff dies first)
   5. Defender bonus stacking: +20% home / +10% owned non-home / 0 elsewhere; +1%/Wall level cap +40%; terrain combat cap +25% additive (`§16.10`)
   6. Marsh attacker −10% Atk (applied before RPS) (`§16.10`)
   7. Rout: side at <15% HP routs, additional 30% flee
-- [ ] `Combat::ComputeLoot.call(battle)` — 25% per-resource cap or carrying capacity, whichever lower
-- [ ] `Combat::ApplyOutcome.call(battle)` — update stockpiles, casualties, node ownership for capture intent, ruin claim, etc.
-- [ ] Multi-side arrival ordering: sequential by ETA at same region (`§16.3` open follow-up — pick sequential)
-- [ ] Persist round-by-round log to `battles.log` jsonb; battle report rendering serializer
+- [x] `Combat::ComputeLoot.call(battle)` — 25% per-resource cap or carrying capacity, whichever lower
+- [x] `Combat::ApplyOutcome.call(battle)` — update stockpiles, casualties, walls level/hp, army positions (node ownership / ruin claim deferred to Phase 7)
+- [x] Multi-side arrival ordering: sequential by ETA at same region — picked sequential, deterministic via existing `ScheduledEvents::Drain.order(:fire_at, :id)`
+- [x] Persist round-by-round log to `battles.log` jsonb; battle report rendering serializer
 
 ### API endpoints
-- [ ] `GET  /v1/kingdoms/:id/battles` (recent for this kingdom)
-- [ ] `GET  /v1/battles/:id`
-- [ ] `GET  /v1/worlds/:id/battles` (admin / archive)
+- [x] `GET  /v1/kingdoms/:id/battles` (recent for this kingdom)
+- [x] `GET  /v1/battles/:id`
+- [x] `GET  /v1/admin/worlds/:id/battles` (admin / archive)
 
 ### Tests
-- [ ] Pikeman counter beats Knight rush at 1.6x with reasonable counts
-- [ ] Defender bonus stacking math (home + Walls + terrain, capped at terrain +25%)
-- [ ] Variance bound, deterministic seeded RNG for tests
-- [ ] Rout threshold triggers
-- [ ] Loot capped by capacity AND by 25%-of-stockpile, lower wins
-- [ ] Wall destruction lowers defender bonus on follow-up attack
+- [x] Pikeman counter beats Knight rush at 1.6x with reasonable counts
+- [x] Defender bonus stacking math (home + Walls + terrain, capped at terrain +25%)
+- [x] Variance bound, deterministic seeded RNG for tests
+- [x] Rout threshold triggers
+- [x] Loot capped by capacity AND by 25%-of-stockpile, lower wins
+- [x] Wall destruction lowers defender bonus on follow-up attack
 
 ---
 

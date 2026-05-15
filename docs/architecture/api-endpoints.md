@@ -12,7 +12,7 @@ The **authoritative request/response shape** is [docs/openapi.yaml](../openapi.y
 |---|---|---|
 | `/v1/auth/...` | Player | none required for `magic_link`/`exchange`, Bearer for the rest |
 | `/v1/admin/auth/...` | Admin | same, scoped to admin |
-| `/v1/servers`, `/v1/worlds`, `/v1/kingdoms`, `/v1/armies` | Player | player-scope Bearer |
+| `/v1/servers`, `/v1/worlds`, `/v1/kingdoms`, `/v1/armies`, `/v1/battles` | Player | player-scope Bearer |
 | `/v1/admin/servers`, `/v1/admin/worlds` | Admin | admin-scope Bearer |
 
 A token from the wrong scope returns 401 — see [02-identity-and-servers.md](02-identity-and-servers.md#two-actors-one-substrate).
@@ -139,6 +139,18 @@ See [06-military.md](06-military.md).
 
 ---
 
+## Phase 6 — Combat
+
+See [07-combat.md](07-combat.md).
+
+| Method | Path | Service | Notes |
+|---|---|---|---|
+| GET | `/v1/kingdoms/:id/battles` | — | battles where this kingdom is attacker or defender; `limit`+`offset` |
+| GET | `/v1/battles/:id` | — | single battle + all participants; player must own attacker or defender |
+| GET | `/v1/admin/worlds/:id/battles` | — | admin-only world archive of all battles |
+
+---
+
 ## Health
 
 | Method | Path | Notes |
@@ -152,7 +164,6 @@ See [06-military.md](06-military.md).
 
 | Phase | Endpoints (planned) | Status |
 |---|---|---|
-| Phase 6 | `/v1/kingdoms/:id/battles`, `/v1/battles/:id`, `/v1/worlds/:id/battles` | not shipped |
 | Phase 7 | `/v1/worlds/:id/nodes`, `/v1/nodes/:id` | not shipped |
 | Phase 8 | `/v1/kingdoms/:id/caravans`, `/v1/worlds/:id/trade-ledger` | not shipped |
 | Phase 9 | `/v1/kingdoms/:id/wonder*`, `/v1/worlds/:id/wonders` | not shipped |

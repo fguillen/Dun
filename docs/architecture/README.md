@@ -24,9 +24,10 @@ The docs go from **outside-in**: each file zooms one level deeper.
 5. **Economy & buildings** ([04-economy-and-buildings.md](04-economy-and-buildings.md)) — Phase 3: lazy stockpile accrual, build queue, costs and times.
 6. **Tick engine** ([05-tick-engine.md](05-tick-engine.md)) — Phase 4: scheduled events, recurring jobs, the internal `dun.*` event bus.
 7. **Military** ([06-military.md](06-military.md)) — Phase 5: units catalog, training, army movement.
-8. **API endpoint reference** ([api-endpoints.md](api-endpoints.md)) — every endpoint, cross-linked back to the phase that introduced it.
+8. **Combat** ([07-combat.md](07-combat.md)) — Phase 6: 6-round simulator, terrain combat, wall damage, battle reports.
+9. **API endpoint reference** ([api-endpoints.md](api-endpoints.md)) — every endpoint, cross-linked back to the phase that introduced it.
 
-Phases 6–14 are not yet shipped; their slots in this doc set will fill in as the work lands.
+Phases 7–14 are not yet shipped; their slots in this doc set will fill in as the work lands.
 
 ---
 
@@ -72,7 +73,7 @@ The backend grows outward in five concentric rings. Each ring depends only on th
 | **Foundations** (Phase 0) | request envelope, auth substrate, observability, ULIDs | install-time |
 | **Identity** (Phase 1) | Player, Admin, MagicLink, ApiKey, Server, ServerAccess, PlayerProfile | account-lifetime |
 | **World** (Phase 2) | World, Region, RegionAdjacency, Node, Ruin, Kingdom | round-lifetime (~weeks) |
-| **Economy & military** (Phases 3, 5) | Building, BuildOrder, Army, TrainingOrder, MarchOrder | kingdom-lifetime (round) |
+| **Economy, military & combat** (Phases 3, 5, 6) | Building, BuildOrder, Army, TrainingOrder, MarchOrder, Battle, BattleParticipant | kingdom-lifetime (round) |
 | **Time** (Phase 4) | ScheduledEvent, recurring jobs, internal event bus | continuous |
 
 The **Time** layer is structurally separate: it sits next to the World ring rather than inside it, because it's what gives the World state ring its evolution over time. Every dated promise (a build finishing, a march arriving) is a row in `scheduled_events`, drained every 5 seconds by the discrete-event tick job. See [05-tick-engine.md](05-tick-engine.md).
@@ -81,7 +82,6 @@ The **Time** layer is structurally separate: it sits next to the World ring rath
 
 ## What is _not_ here
 
-- **Combat resolution** — Phase 6, not started. Stub at [Marches::Arrive#handle_combat_stub](../../app/services/marches/arrive.rb#L60).
 - **Trade & caravans** — Phase 8.
 - **Wonder mechanics, round end, anti-abuse, weather, fog of war** — Phases 9–13, none started.
 - **Deployment** — Phase 14, not started. Currently `bin/dev` runs the web server and Solid Queue worker via foreman; production deployment is not yet defined.

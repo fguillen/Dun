@@ -228,7 +228,8 @@ Mixed-composition armies move at their slowest member's pace. A knight (speed 1.
 |---|---|---|
 | `reinforce` | parks the army at the target, status `home` | already complete |
 | `scout` | parks `returning` at the target (so Phase 13 can chain a return) | Phase 13 (fog of war) |
-| `attack` / `capture` / `claim_ruin` | parks `engaged` at the target | Phase 6 (combat) / Phase 7 (nodes, ruins) |
+| `attack` | calls `Combat::Resolve`; runs combat or walks in if no defender | Phase 6 ([07-combat.md](07-combat.md)) ✅ |
+| `capture` / `claim_ruin` | parks `engaged` at the target | Phase 7 (nodes, ruins) |
 | `caravan` | parks `home` at the target | Phase 8 (trade) |
 
 [Marches::Arrive](../../app/services/marches/arrive.rb) holds the dispatch table; the stubs have comments pointing at which later phase will replace them. Replacing them is the only thing those phases need to do — the scheduling, event handling, and state transitions are already in place.
@@ -289,7 +290,8 @@ POST /v1/armies/:strike_force_id/march  { target_region_id: ..., intent: "attack
 
 DiscreteEventTickJob → ... → Marches::Arrive.call
       handler dispatches by intent:
-      attack/capture/claim_ruin → army.status = "engaged"   (Phase 6 plugs Combat::Resolve here)
+      attack → Combat::Resolve (real combat — see 07-combat.md)
+      capture/claim_ruin → army.status = "engaged" (Phase 7 plugs node/ruin combat here)
       mark order arrived
       emit dun.march_order.arrived
 ```
@@ -318,12 +320,10 @@ Both are served by [Api::ArmiesController](../../app/controllers/api/armies_cont
 
 ---
 
-## What Phase 6 inherits
+## What Phase 6 plugged into this layer
 
-When combat lands, the only services that need to touch this layer are:
+Combat has shipped — see [07-combat.md](07-combat.md). The seams it used:
 
-1. **`Combat::Resolve`** — replaces the `handle_combat_stub` body in [Marches::Arrive](../../app/services/marches/arrive.rb#L60). Inputs are the attacking `Army` and any defenders at the region. Output: a `Battle` row with the round-by-round log, updated `composition` for both sides, possible loot transfer.
-2. **`Battle` and `BattleParticipant` tables** — new schema.
-3. Optionally **multi-arrival ordering** — if two attackers reach the same region at the same `arrives_at`, they should resolve sequentially per `§16.3`. The `ScheduledEvents::Drain` already orders by `(fire_at, id)`, so ULID order gives deterministic sequencing for free.
-
-Nothing else needs to change.
+1. **`Combat::Resolve`** replaced the body of `handle_combat_stub` for intent `attack` only. `capture` / `claim_ruin` still parks the army `engaged` — Phase 7 will plug `Nodes::Capture` / `Ruins::Claim` against the wilderness garrisons stored on `nodes.garrison` and `ruins.garrison`.
+2. **`Battle` and `BattleParticipant` tables** were added; both `BattleParticipant.army_id` and `Battle.march_order_id` are `dependent: :nullify` so destroying an emptied army (Phase 5's cascade) does not orphan historical reports.
+3. **Multi-attacker arrival** resolves sequentially via `ScheduledEvents::Drain`'s existing `(fire_at, id)` ordering — no Phase 6 code was needed for that.
