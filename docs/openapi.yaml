@@ -1273,6 +1273,72 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
+  # ─── Phase 6: battles ───────────────────────────────────────────────────────
+
+  /kingdoms/{kingdom_id}/battles:
+    parameters:
+      - in: path
+        name: kingdom_id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listKingdomBattles
+      tags: [Player battles]
+      summary: List battles involving this kingdom (attacker or defender)
+      description: |
+        Battles are ordered by `ended_at` desc, then by `id` desc for a stable
+        tie-break. Default limit is 25; max 100.
+      security: [{ playerBearer: [] }]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Battle list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [battles, total_count]
+                properties:
+                  battles:
+                    type: array
+                    items: { $ref: "#/components/schemas/Battle" }
+                  total_count: { type: integer, minimum: 0 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /battles/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: showBattle
+      tags: [Player battles]
+      summary: Show a single battle, with full round-by-round log + participants
+      description: |
+        Visible to players who own either the attacker or the defender kingdom.
+        Other players receive 404.
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Battle detail.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [battle, participants]
+                properties:
+                  battle: { $ref: "#/components/schemas/Battle" }
+                  participants:
+                    type: array
+                    items: { $ref: "#/components/schemas/BattleParticipant" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ─── Admin worlds ───────────────────────────────────────────────────────────
 
   /admin/servers/{server_id}/worlds:
@@ -1470,6 +1536,45 @@ paths:
       security: [{ adminBearer: [] }]
       responses:
         "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ─── Admin world battles ────────────────────────────────────────────────────
+
+  /admin/worlds/{world_id}/battles:
+    parameters:
+      - in: path
+        name: world_id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listWorldBattles
+      tags: [Admin worlds]
+      summary: List all battles in an administered world
+      description: |
+        Visible to admins of the world's server. Battles are ordered by
+        `ended_at` desc, then `id` desc. Default limit is 25; max 100.
+      security: [{ adminBearer: [] }]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Battle list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [battles, total_count]
+                properties:
+                  battles:
+                    type: array
+                    items: { $ref: "#/components/schemas/Battle" }
+                  total_count: { type: integer, minimum: 0 }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -1979,3 +2084,62 @@ components:
         arrives_at: { type: string, format: date-time }
         arrived_at: { type: [string, "null"], format: date-time }
         recalled_at: { type: [string, "null"], format: date-time }
+
+    # ─── Phase 6: battles ──────────────────────────────────────────────────────
+
+    BattleRoundLogEntry:
+      type: object
+      description: One round of the 6-round simulator (§16.3).
+      required: [round, attacker_damage_dealt, defender_damage_dealt, attacker_casualties, defender_casualties]
+      properties:
+        round: { type: integer, minimum: 1, maximum: 6 }
+        attacker_atk: { type: number }
+        attacker_def: { type: number }
+        defender_atk: { type: number }
+        defender_def: { type: number }
+        attacker_damage_dealt: { type: number }
+        defender_damage_dealt: { type: number }
+        attacker_casualties: { $ref: "#/components/schemas/Composition" }
+        defender_casualties: { $ref: "#/components/schemas/Composition" }
+        walls_damage: { type: integer, minimum: 0 }
+        walls_level_after: { type: integer, minimum: 0 }
+
+    Battle:
+      type: object
+      required:
+        [ id, world_id, region_id, attacker_kingdom_id, defender_kingdom_id,
+          outcome, loot, log, started_at, ended_at ]
+      properties:
+        id: { type: string }
+        world_id: { type: string }
+        region_id: { type: string }
+        attacker_kingdom_id: { type: string }
+        defender_kingdom_id: { type: string }
+        march_order_id: { type: [string, "null"] }
+        outcome:
+          type: string
+          enum: [attacker_victory, defender_victory, attacker_rout, defender_rout]
+          description: Final battle outcome per §16.3.
+        loot:
+          type: object
+          description: Resources transferred from defender to attacker (after caps).
+          additionalProperties: { type: integer, minimum: 0 }
+        log:
+          type: array
+          description: Round-by-round summary; 1 to 6 entries.
+          items: { $ref: "#/components/schemas/BattleRoundLogEntry" }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+
+    BattleParticipant:
+      type: object
+      required: [id, battle_id, kingdom_id, side, starting_composition, ending_composition, casualties]
+      properties:
+        id: { type: string }
+        battle_id: { type: string }
+        kingdom_id: { type: string }
+        army_id: { type: [string, "null"] }
+        side: { type: string, enum: [attacker, defender] }
+        starting_composition: { $ref: "#/components/schemas/Composition" }
+        ending_composition: { $ref: "#/components/schemas/Composition" }
+        casualties: { $ref: "#/components/schemas/Composition" }
