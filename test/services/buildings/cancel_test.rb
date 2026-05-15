@@ -40,5 +40,17 @@ module Buildings
       @order.update!(completed_at: Time.current)
       assert_raises(Cancel::AlreadyResolved) { Cancel.call(build_order: @order) }
     end
+
+    test "marks the matching ScheduledEvent processed" do
+      event = ScheduledEvent.pending
+        .where(kind: "build_completion")
+        .where("payload->>'build_order_id' = ?", @order.id)
+        .first
+      assert event
+
+      Cancel.call(build_order: @order)
+
+      assert event.reload.processed_at.present?
+    end
   end
 end

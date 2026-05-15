@@ -2,9 +2,13 @@ module Worlds
   class HousekeepingJob < ApplicationJob
     queue_as :default
 
+    PROCESSED_EVENT_TTL = 7.days
+
     def perform
       auto_cancel_stale_proposed_worlds
       eager_start_overdue_worlds
+      close_overdue_grace_windows
+      reap_old_processed_events
     end
 
     private
@@ -26,6 +30,18 @@ module Worlds
       rescue Worlds::Start::WorldNotStartable
         next
       end
+    end
+
+    def close_overdue_grace_windows
+      World.where(status: "grace").where("grace_closes_at <= ?", Time.current).find_each do |world|
+        Worlds::EndGrace.call(world)
+      rescue => e
+        Rails.logger.warn(event: "worlds.housekeeping.end_grace_failed", world_id: world.id, error_class: e.class.name, error_message: e.message)
+      end
+    end
+
+    def reap_old_processed_events
+      ScheduledEvent.processed.where("processed_at < ?", PROCESSED_EVENT_TTL.ago).delete_all
     end
   end
 end

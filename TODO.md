@@ -180,8 +180,8 @@ Implements `§6`, `§7`, `§10`, `§16.4`.
 - [x] `Production::RateFor.call(kingdom:, resource:)` — `base × level + node bonuses`
 
 ### Tick integration (Phase 4 owns the scheduler; building hooks live here)
-- [ ] Build completions resolved in `DiscreteEventTick` (Phase 3 resolves lazily on read via `Buildings::ResolveCompletions`)
-- [ ] Stockpile checkpoint flushed in `ProductionCheckpoint` (1 min) (Phase 3 reads lazily via `Stockpile::Read`)
+- [x] Build completions resolved in `DiscreteEventTick` (Phase 3 resolves lazily on read via `Buildings::ResolveCompletions`)
+- [x] Stockpile checkpoint flushed in `ProductionCheckpoint` (1 min) (Phase 3 reads lazily via `Stockpile::Read`)
 
 ### API endpoints
 - [x] `GET  /v1/kingdoms/:id` (status: resources, production, queue)
@@ -202,19 +202,19 @@ Implements `§6`, `§7`, `§10`, `§16.4`.
 
 Implements `§17.5` tick cadences. This phase wires the recurring jobs that drive every other system.
 
-- [ ] `DiscreteEventTick` (every 5s via Solid Queue recurring): processes any `ScheduledEvent` rows with `fire_at <= now` — build completions, training completions, march arrivals, battles, Wonder phase transitions, caravan arrivals, weather edges
-- [ ] `ProductionCheckpoint` (every 1m): flush stockpile snapshots, enforce caps
-- [ ] `StatsRefresh` (every 5m): leaderboard recompute eligibility, audit clusters
-- [ ] `WorldHousekeeping` (every 1h): grace expiry, weather scheduling lookahead, rate-limit windows, ruin/scout cleanup
-- [ ] `ScheduledEvent` model: `(world_id, kind, payload jsonb, fire_at, processed_at)` — single ordered source for all timed events
-- [ ] Idempotent event processing (use DB lock or `SELECT ... FOR UPDATE SKIP LOCKED`)
-- [ ] Internal event bus (`§17.3` API constraint): `DomainEvent` table or `ActiveSupport::Notifications` namespace `dun.*` that any future integration can subscribe to without backend rework
-- [ ] Tick jitter target ±5s; ETAs rounded to the minute on display
+- [x] `DiscreteEventTick` (every 5s via Solid Queue recurring): processes any `ScheduledEvent` rows with `fire_at <= now` — build completions, training completions, march arrivals, battles, Wonder phase transitions, caravan arrivals, weather edges
+- [x] `ProductionCheckpoint` (every 1m): flush stockpile snapshots, enforce caps
+- [x] `StatsRefresh` (every 5m): leaderboard recompute eligibility, audit clusters (stub — Phases 10/11 fill in)
+- [x] `WorldHousekeeping` (every 1h): grace expiry safety net, processed-event reaper (weather/rate-limit/ruin/scout cleanup added by their own phases)
+- [x] `ScheduledEvent` model: `(world_id, kind, payload jsonb, fire_at, processed_at)` — single ordered source for all timed events
+- [x] Idempotent event processing (use DB lock or `SELECT ... FOR UPDATE SKIP LOCKED`)
+- [x] Internal event bus (`§17.3` API constraint): `ActiveSupport::Notifications` namespace `dun.*` that any future integration can subscribe to without backend rework
+- [x] Tick jitter target ±5s; ETAs rounded to the minute on display
 
 ### Tests
-- [ ] Event scheduling, deduplication, late processing safety
-- [ ] Multiple events at same `fire_at` resolved deterministically (order by id)
-- [ ] Production checkpoint correctness across tick boundaries (drift ≤ 1m)
+- [x] Event scheduling, deduplication, late processing safety
+- [x] Multiple events at same `fire_at` resolved deterministically (order by id)
+- [x] Production checkpoint correctness across tick boundaries (drift ≤ 1m)
 
 ---
 

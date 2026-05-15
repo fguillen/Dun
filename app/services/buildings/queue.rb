@@ -53,13 +53,22 @@ module Buildings
 
         time = Buildings::TimeFor.call(kind: @kind, level: @target_level, kingdom: kingdom)
         now = Time.current
-        BuildOrder.create!(
+        order = BuildOrder.create!(
           kingdom: kingdom,
           building: building,
           target_level: @target_level,
           started_at: now,
           completes_at: now + time
         )
+
+        ScheduledEvents::Schedule.call(
+          world: kingdom.world,
+          kind: "build_completion",
+          fire_at: order.completes_at,
+          payload: { "build_order_id" => order.id }
+        )
+
+        order
       end
     end
 

@@ -48,5 +48,50 @@ module Buildings
       Complete.call(build_order: barracks_order)
       assert_equal original_quarry_completes_at.to_i, quarry_order.reload.completes_at.to_i
     end
+
+    test "marks the matching ScheduledEvent processed" do
+      order = Queue.call(kingdom: @kingdom, kind: "quarry", target_level: 2)
+      event = ScheduledEvent.pending
+        .where(kind: "build_completion")
+        .where("payload->>'build_order_id' = ?", order.id)
+        .first
+      assert event
+
+      Complete.call(build_order: order)
+      assert event.reload.processed_at.present?
+    end
+
+    test "Stone Mason completion reschedules sibling ScheduledEvent fire_at" do
+      @kingdom.buildings.find_by(kind: "town_hall").update!(level: 10)
+      stone_mason_order = Queue.call(kingdom: @kingdom, kind: "stone_mason", target_level: 1)
+      quarry_order = Queue.call(kingdom: @kingdom, kind: "quarry", target_level: 2)
+
+      sibling_event = ScheduledEvent.pending
+        .where(kind: "build_completion")
+        .where("payload->>'build_order_id' = ?", quarry_order.id)
+        .first
+      original_fire_at = sibling_event.fire_at
+
+      Complete.call(build_order: stone_mason_order)
+      new_completes_at = quarry_order.reload.completes_at
+
+      assert sibling_event.reload.fire_at < original_fire_at
+      assert_in_delta new_completes_at, sibling_event.fire_at, 1
+    end
+
+    test "emits dun.build_order.completed notification" do
+      order = Queue.call(kingdom: @kingdom, kind: "quarry", target_level: 2)
+      captured = nil
+      ActiveSupport::Notifications.subscribed(
+        ->(_name, _start, _finish, _id, payload) { captured = payload },
+        "dun.build_order.completed"
+      ) do
+        Complete.call(build_order: order)
+      end
+
+      assert_equal order.id, captured[:build_order_id]
+      assert_equal "quarry", captured[:building_kind]
+      assert_equal 2, captured[:level]
+    end
   end
 end

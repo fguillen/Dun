@@ -30,5 +30,34 @@ module Worlds
       Worlds::HousekeepingJob.perform_now
       assert_equal "proposed", world.reload.status
     end
+
+    test "closes a grace window whose grace_closes_at has passed (safety net)" do
+      world = create(:world, :grace)
+      world.update_columns(grace_closes_at: 5.minutes.ago)
+
+      Worlds::HousekeepingJob.perform_now
+
+      assert_equal "active", world.reload.status
+    end
+
+    test "leaves a still-open grace window alone" do
+      world = create(:world, :grace)
+      world.update_columns(grace_closes_at: 1.hour.from_now)
+      Worlds::HousekeepingJob.perform_now
+      assert_equal "grace", world.reload.status
+    end
+
+    test "reaps ScheduledEvents whose processed_at is older than 7 days" do
+      world = create(:world, :active)
+      old_event = create(:scheduled_event, world: world, kind: "build_completion", fire_at: 8.days.ago, processed_at: 8.days.ago)
+      recent_event = create(:scheduled_event, world: world, kind: "build_completion", fire_at: 1.day.ago, processed_at: 1.day.ago)
+      pending_event = create(:scheduled_event, world: world, kind: "build_completion", fire_at: 1.minute.ago)
+
+      Worlds::HousekeepingJob.perform_now
+
+      refute ScheduledEvent.exists?(old_event.id)
+      assert ScheduledEvent.exists?(recent_event.id)
+      assert ScheduledEvent.exists?(pending_event.id)
+    end
   end
 end

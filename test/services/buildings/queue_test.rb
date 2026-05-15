@@ -25,6 +25,17 @@ module Buildings
       assert_equal 50_000 - cost["gold"], @kingdom.stockpiles["gold"]
     end
 
+    test "schedules a build_completion ScheduledEvent at completes_at" do
+      order = Queue.call(kingdom: @kingdom, kind: "quarry", target_level: 2)
+
+      event = ScheduledEvent.pending
+        .where(kind: "build_completion")
+        .where("payload->>'build_order_id' = ?", order.id)
+        .first
+      assert event, "expected a pending build_completion ScheduledEvent for the order"
+      assert_in_delta order.completes_at, event.fire_at, 1
+    end
+
     test "tier gate: stable requires barracks 3" do
       @kingdom.buildings.find_by(kind: "barracks").update!(level: 2)
       err = assert_raises(Queue::TierGateUnmet) do

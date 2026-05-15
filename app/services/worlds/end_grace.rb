@@ -20,6 +20,13 @@ module Worlds
         Region.where(id: unused_spawn_ids).update_all(spawn_eligible: false) if unused_spawn_ids.any?
 
         world.update!(status: "active")
+
+        ActiveSupport::Notifications.instrument(
+          "dun.world.grace_closed",
+          world_id: world.id,
+          closed_at: Time.current
+        )
+
         world
       end
     end

@@ -17,3 +17,15 @@ production:
   worlds_housekeeping:
     class: Worlds::HousekeepingJob
     schedule: every hour at minute 3
+
+  discrete_event_tick:
+    class: DiscreteEventTickJob
+    schedule: every 5 seconds
+
+  production_checkpoint:
+    class: ProductionCheckpointJob
+    schedule: every minute
+
+  stats_refresh:
+    class: StatsRefreshJob
+    schedule: every 5 minutes

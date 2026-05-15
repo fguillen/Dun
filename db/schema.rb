@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_14_100001) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_15_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -62,6 +62,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_14_100001) do
     t.datetime "updated_at", null: false
     t.index ["kingdom_id", "kind"], name: "index_buildings_on_kingdom_id_and_kind", unique: true
     t.index ["kingdom_id"], name: "index_buildings_on_kingdom_id"
+  end
+
+  create_table "data_migrations", primary_key: "version", id: :string, force: :cascade do |t|
   end
 
   create_table "kingdoms", id: :string, force: :cascade do |t|
@@ -167,6 +170,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_14_100001) do
     t.index ["region_id"], name: "index_ruins_on_region_id"
   end
 
+  create_table "scheduled_events", id: :string, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "fire_at", null: false
+    t.string "kind", null: false
+    t.jsonb "payload", default: {}, null: false
+    t.datetime "processed_at"
+    t.datetime "updated_at", null: false
+    t.string "world_id", null: false
+    t.index ["fire_at", "id"], name: "index_scheduled_events_pending_by_fire_at", where: "(processed_at IS NULL)"
+    t.index ["processed_at"], name: "index_scheduled_events_on_processed_at"
+    t.index ["world_id", "kind"], name: "index_scheduled_events_on_world_id_and_kind"
+    t.index ["world_id"], name: "index_scheduled_events_on_world_id"
+  end
+
   create_table "server_accesses", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "kind", null: false
@@ -261,6 +278,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_14_100001) do
   add_foreign_key "region_adjacencies", "regions", column: "region_b_id"
   add_foreign_key "regions", "worlds"
   add_foreign_key "ruins", "regions"
+  add_foreign_key "scheduled_events", "worlds"
   add_foreign_key "server_accesses", "servers"
   add_foreign_key "server_adminships", "admins"
   add_foreign_key "server_adminships", "admins", column: "granted_by_admin_id"

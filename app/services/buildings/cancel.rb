@@ -22,8 +22,19 @@ module Buildings
         Stockpile::Apply.call(kingdom: order.kingdom, deltas: refund)
 
         order.update!(cancelled_at: Time.current)
+        cancel_scheduled_event(order)
         order
       end
+    end
+
+    private
+
+    def cancel_scheduled_event(order)
+      event = ScheduledEvent.pending
+        .where(kind: "build_completion")
+        .where("payload->>'build_order_id' = ?", order.id)
+        .first
+      ScheduledEvents::Cancel.call(event) if event
     end
   end
 end
