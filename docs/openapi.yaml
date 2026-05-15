@@ -1063,6 +1063,76 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /armies/{id}/march:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      operationId: dispatchMarch
+      tags: [Player armies]
+      summary: Dispatch the army on a march
+      description: |
+        Plans the shortest path on the region adjacency graph and computes
+        per-leg time using the slowest unit's speed and the average terrain
+        modifier of each leg's two endpoints (§16.10). Knight/Scout-only
+        armies ignore terrain. Schedules a `march_arrival` ScheduledEvent at
+        `arrives_at`. Phase 6 will plug combat into the arrival handler.
+      security: [{ playerBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_region_id, intent]
+              properties:
+                target_region_id: { type: string }
+                intent:
+                  type: string
+                  enum: [attack, reinforce, scout, capture, claim_ruin, caravan]
+      responses:
+        "201":
+          description: March dispatched.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarchOrder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            `army_not_home`, `world_not_active`, `invalid_intent`,
+            `army_empty`, `cross_world`, `unreachable`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /armies/{id}/recall:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      operationId: recallMarch
+      tags: [Player armies]
+      summary: Recall the army's active march
+      description: |
+        Cancels the pending `march_arrival` event and creates a new return
+        MarchOrder (intent `reinforce`) with the path reversed and an
+        elapsed-time return (v1 simplification — no per-leg position
+        tracking). v1 charges no unit losses on recall.
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Return march scheduled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarchOrder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: No active march for this army.
+        "422":
+          description: "`march_already_resolved`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
   /armies/{id}/split:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -1887,3 +1957,25 @@ components:
         location_region_id: { type: string }
         composition: { $ref: "#/components/schemas/Composition" }
         total_capacity: { type: integer }
+
+    MarchOrder:
+      type: object
+      required:
+        [ id, army_id, intent, origin_region_id, target_region_id, path,
+          dispatched_at, arrives_at ]
+      properties:
+        id: { type: string }
+        army_id: { type: string }
+        intent:
+          type: string
+          enum: [attack, reinforce, scout, capture, claim_ruin, caravan]
+        origin_region_id: { type: string }
+        target_region_id: { type: string }
+        path:
+          type: array
+          description: Region IDs from origin (first) to target (last), inclusive.
+          items: { type: string }
+        dispatched_at: { type: string, format: date-time }
+        arrives_at: { type: string, format: date-time }
+        arrived_at: { type: [string, "null"], format: date-time }
+        recalled_at: { type: [string, "null"], format: date-time }

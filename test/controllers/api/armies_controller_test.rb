@@ -11,7 +11,9 @@ module Api
       profile = create(:player_profile, server: @server, player: @player)
 
       world = create(:world, :grace, server: @server)
-      region = create(:region, world: world)
+      region = create(:region, world: world, terrain: "plains", name: "Home")
+      @neighbor = create(:region, world: world, terrain: "plains", name: "Neighbor")
+      RegionAdjacency.connect(region, @neighbor)
       @kingdom = create(:kingdom,
         world: world, player_profile: profile, home_region: region)
       @garrison = create(:army, :garrison,
@@ -96,6 +98,49 @@ module Api
         headers: auth_headers
       assert_response :unprocessable_entity
       assert_equal "incompatible_armies", response.parsed_body.dig("error", "code")
+    end
+
+    test "POST march dispatches a reinforce march and returns 201 with arrives_at" do
+      post "/v1/armies/#{@garrison.id}/march",
+        params: { target_region_id: @neighbor.id, intent: "reinforce" },
+        headers: auth_headers
+      assert_response :created
+      body = response.parsed_body
+      assert_equal "reinforce", body["intent"]
+      assert_not_nil body["arrives_at"]
+      assert_equal "marching", @garrison.reload.status
+    end
+
+    test "POST march 422 when army is already marching" do
+      @garrison.update!(status: "marching")
+      post "/v1/armies/#{@garrison.id}/march",
+        params: { target_region_id: @neighbor.id, intent: "reinforce" },
+        headers: auth_headers
+      assert_response :unprocessable_entity
+      assert_equal "army_not_home", response.parsed_body.dig("error", "code")
+    end
+
+    test "POST march 422 when target is unreachable" do
+      isolated = create(:region, world: @kingdom.world, name: "Isolated")
+      post "/v1/armies/#{@garrison.id}/march",
+        params: { target_region_id: isolated.id, intent: "reinforce" },
+        headers: auth_headers
+      assert_response :unprocessable_entity
+      assert_equal "unreachable", response.parsed_body.dig("error", "code")
+    end
+
+    test "POST recall returns the new return MarchOrder" do
+      ::Marches::Dispatch.call(army: @garrison, target_region: @neighbor, intent: "attack")
+      post "/v1/armies/#{@garrison.id}/recall", headers: auth_headers
+      assert_response :success
+      body = response.parsed_body
+      assert_equal "reinforce", body["intent"]
+      assert_equal "returning", @garrison.reload.status
+    end
+
+    test "POST recall 404 when no active march" do
+      post "/v1/armies/#{@garrison.id}/recall", headers: auth_headers
+      assert_response :not_found
     end
   end
 end

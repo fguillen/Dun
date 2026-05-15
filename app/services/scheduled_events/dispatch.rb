@@ -13,6 +13,10 @@ module ScheduledEvents
       "training_completion" => ->(event) {
         training_order = TrainingOrder.find_by(id: event.payload["training_order_id"])
         Training::Complete.call(training_order: training_order) if training_order
+      },
+      "march_arrival" => ->(event) {
+        march_order = MarchOrder.find_by(id: event.payload["march_order_id"])
+        Marches::Arrive.call(march_order: march_order) if march_order
       }
     }.freeze
 

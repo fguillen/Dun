@@ -45,6 +45,8 @@ Rails.application.routes.draw do
 
     resources :armies, only: %i[show] do
       member do
+        post :march
+        post :recall
         post :split
         post :rename
         post :merge

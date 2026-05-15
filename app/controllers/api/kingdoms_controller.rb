@@ -4,6 +4,7 @@ module Api
       kingdom = load_kingdom
       Buildings::ResolveCompletions.call(kingdom)
       Training::ResolveCompletions.call(kingdom)
+      Marches::ResolveArrivals.call(kingdom)
       kingdom.reload
       render json: self.class.serialize(kingdom)
     end

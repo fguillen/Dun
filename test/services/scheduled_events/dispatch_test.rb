@@ -77,6 +77,40 @@ module ScheduledEvents
       assert event.reload.processed_at.present?
     end
 
+    test "march_arrival handler arrives the order and marks event processed" do
+      world = create(:world, :grace)
+      home = create(:region, world: world, name: "Home")
+      target = create(:region, world: world, name: "Target")
+      RegionAdjacency.connect(home, target)
+      kingdom = create(:kingdom, world: world, home_region: home)
+      army = create(:army, kingdom: kingdom, location_region: home, name: "Alpha",
+        composition: { "knight" => 1 })
+      order = ::Marches::Dispatch.call(army: army, target_region: target, intent: "reinforce")
+      order.update!(arrives_at: 1.minute.ago)
+      event = ScheduledEvent.pending
+        .where(kind: "march_arrival")
+        .where("payload->>'march_order_id' = ?", order.id)
+        .first
+
+      Dispatch.call(event)
+
+      assert event.reload.processed_at.present?
+      assert order.reload.arrived_at.present?
+      assert_equal target.id, army.reload.location_region_id
+    end
+
+    test "march_arrival is a no-op when the march order has been deleted" do
+      world = create(:world, :active)
+      event = create(:scheduled_event,
+        world: world,
+        kind: "march_arrival",
+        fire_at: 1.minute.ago,
+        payload: { "march_order_id" => "01HZZZZZZZZZZZZZZZZZZZZZZZ" })
+
+      assert_nothing_raised { Dispatch.call(event) }
+      assert event.reload.processed_at.present?
+    end
+
     test "no-op on already-processed event" do
       event = create(:scheduled_event, processed_at: 1.minute.ago)
       Dispatch.call(event)
