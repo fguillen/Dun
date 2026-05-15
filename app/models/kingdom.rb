@@ -12,6 +12,8 @@ class Kingdom < ApplicationRecord
   has_many :claimed_ruins, class_name: "Ruin", foreign_key: :claimed_by_kingdom_id, dependent: :nullify
   has_many :buildings, dependent: :destroy
   has_many :build_orders, dependent: :destroy
+  has_many :armies, dependent: :destroy
+  has_many :training_orders, dependent: :destroy
 
   validates :player_profile_id, uniqueness: { scope: :world_id }
   validate :profile_belongs_to_world_server

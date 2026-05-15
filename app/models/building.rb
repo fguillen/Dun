@@ -3,6 +3,7 @@ class Building < ApplicationRecord
 
   belongs_to :kingdom
   has_many :build_orders, dependent: :destroy
+  has_many :training_orders, dependent: :destroy
 
   validates :kind, presence: true, inclusion: { in: Buildings::Catalog::KINDS }
   validates :kind, uniqueness: { scope: :kingdom_id }

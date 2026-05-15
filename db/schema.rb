@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_15_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_090002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -35,6 +35,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_15_090000) do
     t.datetime "updated_at", null: false
     t.index ["owner_type", "owner_id"], name: "index_api_keys_on_owner_type_and_owner_id"
     t.index ["token_digest"], name: "index_api_keys_on_token_digest", unique: true
+  end
+
+  create_table "armies", id: :string, force: :cascade do |t|
+    t.jsonb "composition", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.string "kingdom_id", null: false
+    t.string "location_region_id", null: false
+    t.string "name", null: false
+    t.string "status", default: "home", null: false
+    t.datetime "updated_at", null: false
+    t.index ["kingdom_id", "name"], name: "index_armies_on_kingdom_id_and_name", unique: true
+    t.index ["kingdom_id", "status"], name: "index_armies_on_kingdom_id_and_status"
+    t.index ["kingdom_id"], name: "index_armies_on_kingdom_id"
+    t.index ["location_region_id"], name: "index_armies_on_location_region_id"
   end
 
   create_table "build_orders", id: :string, force: :cascade do |t|
@@ -94,6 +108,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_15_090000) do
     t.datetime "updated_at", null: false
     t.index ["owner_type", "email"], name: "index_magic_links_on_owner_type_and_email"
     t.index ["token_digest"], name: "index_magic_links_on_token_digest", unique: true
+  end
+
+  create_table "march_orders", id: :string, force: :cascade do |t|
+    t.string "army_id", null: false
+    t.datetime "arrived_at"
+    t.datetime "arrives_at", null: false
+    t.jsonb "cargo"
+    t.datetime "created_at", null: false
+    t.datetime "dispatched_at", null: false
+    t.jsonb "escort_units"
+    t.string "intent", null: false
+    t.string "origin_region_id", null: false
+    t.jsonb "path", default: [], null: false
+    t.datetime "recalled_at"
+    t.string "target_region_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["army_id"], name: "index_march_orders_on_army_id"
+    t.index ["army_id"], name: "index_march_orders_on_army_id_active", where: "((arrived_at IS NULL) AND (recalled_at IS NULL))"
+    t.index ["arrives_at"], name: "index_march_orders_on_arrives_at"
+    t.index ["origin_region_id"], name: "index_march_orders_on_origin_region_id"
+    t.index ["target_region_id", "arrives_at"], name: "index_march_orders_by_target_arrival"
+    t.index ["target_region_id"], name: "index_march_orders_on_target_region_id"
   end
 
   create_table "nodes", id: :string, force: :cascade do |t|
@@ -231,6 +267,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_15_090000) do
     t.index ["slug"], name: "index_servers_on_slug", unique: true
   end
 
+  create_table "training_orders", id: :string, force: :cascade do |t|
+    t.string "building_id", null: false
+    t.string "building_kind", null: false
+    t.datetime "cancelled_at"
+    t.datetime "completed_at"
+    t.datetime "completes_at", null: false
+    t.integer "count", null: false
+    t.datetime "created_at", null: false
+    t.string "kingdom_id", null: false
+    t.datetime "started_at", null: false
+    t.string "unit", null: false
+    t.datetime "updated_at", null: false
+    t.index ["building_id"], name: "index_training_orders_on_building_id"
+    t.index ["building_id"], name: "index_training_orders_on_building_id_unresolved", where: "((completed_at IS NULL) AND (cancelled_at IS NULL))"
+    t.index ["completes_at"], name: "index_training_orders_on_completes_at"
+    t.index ["kingdom_id"], name: "index_training_orders_on_kingdom_id"
+    t.index ["kingdom_id"], name: "index_training_orders_on_kingdom_id_unresolved", where: "((completed_at IS NULL) AND (cancelled_at IS NULL))"
+  end
+
   create_table "world_invitations", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.citext "email", null: false
@@ -265,12 +320,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_15_090000) do
     t.index ["winner_kingdom_id"], name: "index_worlds_on_winner_kingdom_id"
   end
 
+  add_foreign_key "armies", "kingdoms"
+  add_foreign_key "armies", "regions", column: "location_region_id"
   add_foreign_key "build_orders", "buildings"
   add_foreign_key "build_orders", "kingdoms"
   add_foreign_key "buildings", "kingdoms"
   add_foreign_key "kingdoms", "player_profiles"
   add_foreign_key "kingdoms", "regions", column: "home_region_id"
   add_foreign_key "kingdoms", "worlds"
+  add_foreign_key "march_orders", "armies"
+  add_foreign_key "march_orders", "regions", column: "origin_region_id"
+  add_foreign_key "march_orders", "regions", column: "target_region_id"
   add_foreign_key "nodes", "regions"
   add_foreign_key "player_profiles", "players"
   add_foreign_key "player_profiles", "servers"
@@ -286,6 +346,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_15_090000) do
   add_foreign_key "server_memberships", "players"
   add_foreign_key "server_memberships", "servers"
   add_foreign_key "servers", "admins", column: "owner_admin_id"
+  add_foreign_key "training_orders", "buildings"
+  add_foreign_key "training_orders", "kingdoms"
   add_foreign_key "world_invitations", "admins", column: "invited_by_admin_id"
   add_foreign_key "world_invitations", "worlds"
   add_foreign_key "worlds", "kingdoms", column: "winner_kingdom_id"
