@@ -44,6 +44,39 @@ module ScheduledEvents
       assert event.reload.processed_at.present?
     end
 
+    test "training_completion handler completes the order and marks event processed" do
+      kingdom = create(:kingdom, :with_buildings)
+      kingdom.buildings.find_by(kind: "barracks").update!(level: 1)
+      order = create(:training_order, kingdom: kingdom,
+        building: kingdom.buildings.find_by(kind: "barracks"),
+        building_kind: "barracks", unit: "levy", count: 3,
+        completes_at: 1.minute.ago)
+      event = create(:scheduled_event,
+        world: kingdom.world,
+        kind: "training_completion",
+        fire_at: 1.minute.ago,
+        payload: { "training_order_id" => order.id })
+
+      Dispatch.call(event)
+
+      assert event.reload.processed_at.present?
+      assert order.reload.completed_at.present?
+      garrison = kingdom.armies.find_by(name: Army::GARRISON_NAME)
+      assert_equal 3, garrison.composition["levy"]
+    end
+
+    test "training_completion is a no-op when the order has been deleted" do
+      world = create(:world, :active)
+      event = create(:scheduled_event,
+        world: world,
+        kind: "training_completion",
+        fire_at: 1.minute.ago,
+        payload: { "training_order_id" => "01HZZZZZZZZZZZZZZZZZZZZZZZ" })
+
+      assert_nothing_raised { Dispatch.call(event) }
+      assert event.reload.processed_at.present?
+    end
+
     test "no-op on already-processed event" do
       event = create(:scheduled_event, processed_at: 1.minute.ago)
       Dispatch.call(event)

@@ -37,7 +37,8 @@ Rails.application.routes.draw do
     resources :kingdoms, only: %i[show] do
       member { post :build }
       scope module: :kingdoms do
-        resources :build_orders, only: %i[destroy], path: "build"
+        resources :build_orders,    only: %i[destroy], path: "build"
+        resources :training_orders, only: %i[create destroy], path: "train"
       end
     end
 

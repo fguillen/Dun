@@ -980,6 +980,79 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
+  /kingdoms/{id}/train:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      operationId: queueTrainingOrder
+      tags: [Player kingdoms]
+      summary: Queue a unit training order
+      description: |
+        Each military building (Barracks, Stable, Siege Workshop) has its own
+        independent FIFO training queue (§11). Cost is per-unit × count and
+        deducted via `Stockpile::Apply` immediately. Time per unit follows
+        `base × 0.95^(building_level - 1)`; total time = per-unit × count.
+      security: [{ playerBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [building, unit, count]
+              properties:
+                building:
+                  type: string
+                  enum: [barracks, stable, siege_workshop]
+                unit: { $ref: "#/components/schemas/Unit" }
+                count: { type: integer, minimum: 1 }
+      responses:
+        "201":
+          description: Training order created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainingOrder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            `unknown_unit`, `building_missing`, `unit_not_trainable_here`,
+            `world_not_buildable`, `kingdom_eliminated`, or
+            `insufficient_resources`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /kingdoms/{kingdom_id}/train/{id}:
+    parameters:
+      - in: path
+        name: kingdom_id
+        required: true
+        schema: { type: string }
+      - $ref: "#/components/parameters/PathId"
+    delete:
+      operationId: cancelTrainingOrder
+      tags: [Player kingdoms]
+      summary: Cancel an in-progress training order
+      description: |
+        Refunds 75% of total cost (per-unit × count, floored). Time elapsed is
+        lost. The matching `training_completion` ScheduledEvent is marked
+        processed.
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Training order cancelled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainingOrder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`training_order_already_resolved`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
   # ─── Admin worlds ───────────────────────────────────────────────────────────
 
   /admin/servers/{server_id}/worlds:
@@ -1600,7 +1673,7 @@ components:
       type: object
       required:
         [ id, world_id, stockpiles, warehouse_cap, production_rates,
-          joined_at, buildings, in_progress_builds ]
+          joined_at, buildings, in_progress_builds, in_progress_training ]
       properties:
         id: { type: string }
         world_id: { type: string }
@@ -1616,3 +1689,32 @@ components:
         in_progress_builds:
           type: array
           items: { $ref: "#/components/schemas/BuildOrder" }
+        in_progress_training:
+          type: array
+          items: { $ref: "#/components/schemas/TrainingOrder" }
+
+    # ─── Phase 5: units, training, armies, marches ───────────────────────────
+
+    Unit:
+      type: string
+      description: The 8 unit kinds from §16.3.
+      enum: [levy, archer, pikeman, knight, catapult, royal_guard, scout, trebuchet]
+
+    TrainingOrder:
+      type: object
+      required:
+        [ id, kingdom_id, building_id, building_kind, unit, count,
+          started_at, completes_at ]
+      properties:
+        id: { type: string }
+        kingdom_id: { type: string }
+        building_id: { type: string }
+        building_kind:
+          type: string
+          enum: [barracks, stable, siege_workshop]
+        unit: { $ref: "#/components/schemas/Unit" }
+        count: { type: integer, minimum: 1 }
+        started_at: { type: string, format: date-time }
+        completes_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        cancelled_at: { type: [string, "null"], format: date-time }

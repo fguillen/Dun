@@ -3,6 +3,7 @@ module Api
     def show
       kingdom = load_kingdom
       Buildings::ResolveCompletions.call(kingdom)
+      Training::ResolveCompletions.call(kingdom)
       kingdom.reload
       render json: self.class.serialize(kingdom)
     end
@@ -48,7 +49,8 @@ module Api
         joined_at: kingdom.joined_at&.iso8601,
         eliminated_at: kingdom.eliminated_at&.iso8601,
         buildings: kingdom.buildings.order(:kind).map { |b| serialize_building(b) },
-        in_progress_builds: kingdom.build_orders.in_progress.order(:completes_at).map { |o| serialize_build_order(o) }
+        in_progress_builds: kingdom.build_orders.in_progress.order(:completes_at).map { |o| serialize_build_order(o) },
+        in_progress_training: kingdom.training_orders.in_progress.order(:completes_at).map { |o| Api::Kingdoms::TrainingOrdersController.serialize(o) }
       }
     end
 
