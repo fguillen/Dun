@@ -1023,6 +1023,156 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
+  /kingdoms/{id}/armies:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: listKingdomArmies
+      tags: [Player kingdoms]
+      summary: List the player's armies in this kingdom
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Armies list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [armies]
+                properties:
+                  armies:
+                    type: array
+                    items: { $ref: "#/components/schemas/Army" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /armies/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: showArmy
+      tags: [Player armies]
+      summary: Show an army owned by the requesting player
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Army detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Army" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /armies/{id}/split:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      operationId: splitArmy
+      tags: [Player armies]
+      summary: Carve a new army out of an existing home army
+      description: |
+        Source must be `status: home`. Returns the (now-shrunk) source and the
+        newly-created army. If the source is empty after the split it is
+        destroyed (unless it is the kingdom's auto-managed Garrison).
+      security: [{ playerBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [units, name]
+              properties:
+                units:
+                  type: object
+                  description: Map of unit kind to count to peel off the source army.
+                  additionalProperties: { type: integer, minimum: 0 }
+                name: { type: string, maxLength: 60 }
+      responses:
+        "201":
+          description: Split complete.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [new]
+                properties:
+                  source:
+                    oneOf:
+                      - { $ref: "#/components/schemas/Army" }
+                      - { type: "null" }
+                  new: { $ref: "#/components/schemas/Army" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`army_not_home`, `insufficient_units`, `empty_split`, `invalid_army`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /armies/{id}/rename:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      operationId: renameArmy
+      tags: [Player armies]
+      summary: Rename an army
+      security: [{ playerBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 60 }
+      responses:
+        "200":
+          description: Army renamed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Army" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`name_taken`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /armies/{id}/merge:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      operationId: mergeArmy
+      tags: [Player armies]
+      summary: Merge another home army into this one
+      description: "Both armies must belong to the same kingdom, share a region, and be `status: home`."
+      security: [{ playerBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_id]
+              properties:
+                from_id: { type: string }
+      responses:
+        "200":
+          description: Merge complete.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Army" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`incompatible_armies`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
   /kingdoms/{kingdom_id}/train/{id}:
     parameters:
       - in: path
@@ -1718,3 +1868,22 @@ components:
         completes_at: { type: string, format: date-time }
         completed_at: { type: [string, "null"], format: date-time }
         cancelled_at: { type: [string, "null"], format: date-time }
+
+    Composition:
+      type: object
+      description: Map of unit kind to non-negative integer count.
+      additionalProperties: { type: integer, minimum: 0 }
+
+    Army:
+      type: object
+      required: [id, kingdom_id, name, status, location_region_id, composition, total_capacity]
+      properties:
+        id: { type: string }
+        kingdom_id: { type: string }
+        name: { type: string }
+        status:
+          type: string
+          enum: [home, marching, engaged, returning]
+        location_region_id: { type: string }
+        composition: { $ref: "#/components/schemas/Composition" }
+        total_capacity: { type: integer }

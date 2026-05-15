@@ -39,6 +39,15 @@ Rails.application.routes.draw do
       scope module: :kingdoms do
         resources :build_orders,    only: %i[destroy], path: "build"
         resources :training_orders, only: %i[create destroy], path: "train"
+        resources :armies,          only: %i[index]
+      end
+    end
+
+    resources :armies, only: %i[show] do
+      member do
+        post :split
+        post :rename
+        post :merge
       end
     end
 
