@@ -1,6 +1,11 @@
 class Region < ApplicationRecord
   TERRAINS = %w[plains forest hills mountain marsh].freeze
   TERRAIN_MARCH_MOD = { "plains" => 1.0, "forest" => 0.8, "hills" => 0.9, "mountain" => 0.6, "marsh" => 0.5 }.freeze
+  # §16.10 — additive Def multiplier granted to defender on this terrain.
+  TERRAIN_COMBAT_MOD = { "plains" => 0.0, "forest" => 0.10, "hills" => 0.15, "mountain" => 0.25, "marsh" => 0.0 }.freeze
+  # §16.10 — additive Atk multiplier penalty applied to attacker fighting in a marsh.
+  MARSH_ATTACKER_PENALTY = -0.10
+  TERRAIN_COMBAT_CAP = 0.25
   SPAWN_TERRAINS = %w[plains hills].freeze
 
   belongs_to :world

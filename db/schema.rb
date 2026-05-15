@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_16_090002) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_170002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -51,6 +51,46 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_090002) do
     t.index ["location_region_id"], name: "index_armies_on_location_region_id"
   end
 
+  create_table "battle_participants", id: :string, force: :cascade do |t|
+    t.string "army_id"
+    t.string "battle_id", null: false
+    t.jsonb "casualties", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.jsonb "ending_composition", default: {}, null: false
+    t.string "kingdom_id", null: false
+    t.string "side", null: false
+    t.jsonb "starting_composition", default: {}, null: false
+    t.datetime "updated_at", null: false
+    t.index ["army_id"], name: "index_battle_participants_on_army_id"
+    t.index ["battle_id", "side"], name: "index_battle_participants_on_battle_id_and_side"
+    t.index ["battle_id"], name: "index_battle_participants_on_battle_id"
+    t.index ["kingdom_id"], name: "index_battle_participants_on_kingdom_id"
+  end
+
+  create_table "battles", id: :string, force: :cascade do |t|
+    t.string "attacker_kingdom_id", null: false
+    t.datetime "created_at", null: false
+    t.string "defender_kingdom_id", null: false
+    t.datetime "ended_at", null: false
+    t.jsonb "log", default: [], null: false
+    t.jsonb "loot", default: {}, null: false
+    t.string "march_order_id"
+    t.string "outcome", null: false
+    t.string "region_id", null: false
+    t.datetime "started_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "variance_seed"
+    t.string "world_id", null: false
+    t.index ["attacker_kingdom_id", "ended_at"], name: "index_battles_on_attacker_kingdom_id_and_ended_at"
+    t.index ["attacker_kingdom_id"], name: "index_battles_on_attacker_kingdom_id"
+    t.index ["defender_kingdom_id", "ended_at"], name: "index_battles_on_defender_kingdom_id_and_ended_at"
+    t.index ["defender_kingdom_id"], name: "index_battles_on_defender_kingdom_id"
+    t.index ["march_order_id"], name: "index_battles_on_march_order_id"
+    t.index ["region_id"], name: "index_battles_on_region_id"
+    t.index ["world_id", "ended_at"], name: "index_battles_on_world_id_and_ended_at"
+    t.index ["world_id"], name: "index_battles_on_world_id"
+  end
+
   create_table "build_orders", id: :string, force: :cascade do |t|
     t.string "building_id", null: false
     t.datetime "cancelled_at"
@@ -74,6 +114,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_090002) do
     t.integer "level", default: 0, null: false
     t.jsonb "position"
     t.datetime "updated_at", null: false
+    t.integer "wall_hp"
     t.index ["kingdom_id", "kind"], name: "index_buildings_on_kingdom_id_and_kind", unique: true
     t.index ["kingdom_id"], name: "index_buildings_on_kingdom_id"
   end
@@ -322,6 +363,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_090002) do
 
   add_foreign_key "armies", "kingdoms"
   add_foreign_key "armies", "regions", column: "location_region_id"
+  add_foreign_key "battle_participants", "armies"
+  add_foreign_key "battle_participants", "battles"
+  add_foreign_key "battle_participants", "kingdoms"
+  add_foreign_key "battles", "kingdoms", column: "attacker_kingdom_id"
+  add_foreign_key "battles", "kingdoms", column: "defender_kingdom_id"
+  add_foreign_key "battles", "march_orders"
+  add_foreign_key "battles", "regions"
+  add_foreign_key "battles", "worlds"
   add_foreign_key "build_orders", "buildings"
   add_foreign_key "build_orders", "kingdoms"
   add_foreign_key "buildings", "kingdoms"

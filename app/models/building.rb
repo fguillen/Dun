@@ -12,4 +12,15 @@ class Building < ApplicationRecord
     greater_than_or_equal_to: 0,
     less_than_or_equal_to: Buildings::Catalog::MAX_LEVEL
   }
+
+  WALL_HP_PER_LEVEL = 1_000
+
+  def walls?
+    kind == "walls"
+  end
+
+  def current_wall_hp
+    return 0 unless walls?
+    wall_hp || (level * WALL_HP_PER_LEVEL)
+  end
 end
