@@ -223,33 +223,33 @@ Implements `§17.5` tick cadences. This phase wires the recurring jobs that driv
 Implements `§9`, `§16.3` unit stats, march mechanics, `§16.10` terrain effects on march.
 
 ### Models
-- [ ] `Army` (kingdom_id, name, location_region_id, status: home|marching|engaged|returning, composition jsonb)
-- [ ] `TrainingOrder` (kingdom_id, building_kind, unit, count, started_at, completes_at)
-- [ ] `MarchOrder` (army_id, origin_region_id, target_region_id, intent: attack|reinforce|scout|capture|claim_ruin|caravan, path jsonb, arrives_at, escort_units jsonb null, cargo jsonb null)
+- [x] `Army` (kingdom_id, name, location_region_id, status: home|marching|engaged|returning, composition jsonb)
+- [x] `TrainingOrder` (kingdom_id, building_kind, unit, count, started_at, completes_at)
+- [x] `MarchOrder` (army_id, origin_region_id, target_region_id, intent: attack|reinforce|scout|capture|claim_ruin|caravan, path jsonb, arrives_at, escort_units jsonb null, cargo jsonb null)
 
 ### Services
-- [ ] `Units::Catalog` — 8 units with stats per `§16.3` table (Atk/Def/HP/speed/capacity/cost/train time)
-- [ ] `Units::TrainingTimeFor.call(unit, barracks_or_stable_or_workshop_level)` — scales by building level
-- [ ] `Training::Queue.call(building, unit, count)` — separate queues per Barracks / Stable / Siege Workshop (`§11`)
-- [ ] `Armies::Split.call(army, units)` / `Armies::Rename.call(army, name)` / `Armies::Merge`
-- [ ] `Marches::Plan.call(origin, destination, units)` — shortest path on region graph, slowest-unit speed, terrain modifier `(mod_origin + mod_destination)/2` per `§16.10`, Knights/Scouts terrain-immune
-- [ ] `Marches::Dispatch.call(army, target, intent)` — deducts units from home garrison, creates `MarchOrder` and `ScheduledEvent`
-- [ ] `Marches::Recall.call(march_order)` — schedule return; decide whether to cost unit losses (open follow-up `§16.3`)
-- [ ] Carrying capacity computed from `Units::Catalog` per army
+- [x] `Units::Catalog` — 8 units with stats per `§16.3` table (Atk/Def/HP/speed/capacity/cost/train time)
+- [x] `Units::TrainingTimeFor.call(unit, barracks_or_stable_or_workshop_level)` — scales by building level (`base × 0.95^(L-1)`)
+- [x] `Training::Queue.call(building, unit, count)` — separate queues per Barracks / Stable / Siege Workshop (`§11`)
+- [x] `Armies::Split.call(army, units)` / `Armies::Rename.call(army, name)` / `Armies::Merge`
+- [x] `Marches::Plan.call(origin, destination, units)` — shortest path on region graph (BFS), slowest-unit speed, terrain modifier `(mod_origin + mod_destination)/2` per `§16.10`, Knight/Scout-only armies terrain-immune
+- [x] `Marches::Dispatch.call(army, target, intent)` — locks army, plans, persists `MarchOrder`, sets army marching, schedules `ScheduledEvent`
+- [x] `Marches::Recall.call(march_order)` — cancels arrival, schedules retrace return (no unit losses in v1)
+- [x] Carrying capacity computed from `Units::Catalog` per army (`Army#total_capacity`)
 
 ### API endpoints
-- [ ] `POST /v1/kingdoms/:id/train` — `{building, unit, count}`
-- [ ] `GET  /v1/kingdoms/:id/armies` / `GET /v1/armies/:id`
-- [ ] `POST /v1/armies/:id/march` — `{target, intent}`
-- [ ] `POST /v1/armies/:id/recall`
-- [ ] `POST /v1/armies/:id/split` / `POST /v1/armies/:id/rename`
+- [x] `POST /v1/kingdoms/:id/train` — `{building, unit, count}`
+- [x] `GET  /v1/kingdoms/:id/armies` / `GET /v1/armies/:id`
+- [x] `POST /v1/armies/:id/march` — `{target_region_id, intent}`
+- [x] `POST /v1/armies/:id/recall`
+- [x] `POST /v1/armies/:id/split` / `POST /v1/armies/:id/rename` / `POST /v1/armies/:id/merge`
 
 ### Tests
-- [ ] Training time scales with building level
-- [ ] Separate queues per military building (Barracks, Stable, Siege concurrent)
-- [ ] March time across mixed terrain matches worked example in `§16.10`
-- [ ] Knight-only army ignores terrain penalties
-- [ ] Carrying capacity = sum of unit capacities
+- [x] Training time scales with building level
+- [x] Separate queues per military building (Barracks, Stable, Siege concurrent)
+- [x] March time across mixed terrain matches worked example in `§16.10`
+- [x] Knight-only army ignores terrain penalties
+- [x] Carrying capacity = sum of unit capacities
 
 ---
 
