@@ -21,7 +21,9 @@ module Marches
           handle_reinforce(army, target)
         when "scout"
           handle_scout(army, target)
-        when "attack", "capture", "claim_ruin"
+        when "attack"
+          handle_attack(army, target, order)
+        when "capture", "claim_ruin"
           handle_combat_stub(army, target)
         when "caravan"
           handle_caravan_stub(army, target)
@@ -54,9 +56,19 @@ module Marches
       army.update!(status: "returning", location_region_id: target.id)
     end
 
-    # Phase 6 (combat) plugs in here — Combat::Resolve will replace this stub.
-    # We park the army at the target as `engaged` so the state is meaningful
-    # even before Phase 6 ships.
+    # Phase 6 — `attack` resolves a battle against the target region's home
+    # kingdom (if any). If there is no defender at the region, Combat::Resolve
+    # returns nil and we walk the attacker in unopposed. On a real combat,
+    # Combat::ApplyOutcome has already set the army's final status/location.
+    def handle_attack(army, target, order)
+      battle = Combat::Resolve.call(march_order: order)
+      return battle if battle
+      army.update!(status: "home", location_region_id: target.id)
+      nil
+    end
+
+    # Phase 7 (nodes / ruins) replaces this stub for `capture` and
+    # `claim_ruin`. For now the army is parked at the target as `engaged`.
     def handle_combat_stub(army, target)
       army.update!(status: "engaged", location_region_id: target.id)
     end

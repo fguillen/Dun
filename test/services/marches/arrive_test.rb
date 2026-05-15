@@ -33,8 +33,8 @@ module Marches
       assert_equal "returning", @army.reload.status
     end
 
-    test "attack/capture/claim_ruin park the army as engaged (Phase 6 stub)" do
-      %w[attack capture claim_ruin].each do |intent|
+    test "capture/claim_ruin park the army as engaged (Phase 7 stub)" do
+      %w[capture claim_ruin].each do |intent|
         @army.update!(status: "home", location_region_id: @home.id)
         order = Dispatch.call(army: @army, target_region: @target, intent: intent)
         order.update!(arrives_at: 1.minute.ago)
@@ -43,6 +43,32 @@ module Marches
         assert_equal "engaged", @army.reload.status
         assert_equal @target.id, @army.location_region_id
       end
+    end
+
+    test "attack on an empty target parks the army home (no Battle row)" do
+      order = Dispatch.call(army: @army, target_region: @target, intent: "attack")
+      order.update!(arrives_at: 1.minute.ago)
+      Arrive.call(march_order: order)
+      assert_equal "home", @army.reload.status
+      assert_equal @target.id, @army.location_region_id
+      assert_equal 0, Battle.count
+    end
+
+    test "attack against a defender creates a Battle and emits dun.battle.resolved" do
+      defender = create(:kingdom, :with_buildings, world: @world, home_region: @target)
+      defender.update!(stockpiles: { "gold" => 4_000, "wood" => 4_000, "stone" => 4_000, "iron" => 4_000, "checkpoint_at" => Time.current.iso8601 })
+      create(:army, kingdom: defender, location_region: @target, name: "Garrison", composition: { "pikeman" => 30 })
+
+      order = Dispatch.call(army: @army, target_region: @target, intent: "attack")
+      order.update!(arrives_at: 1.minute.ago)
+
+      events = []
+      ActiveSupport::Notifications.subscribed(->(_, _, _, _, p) { events << p }, "dun.battle.resolved") do
+        Arrive.call(march_order: order)
+      end
+
+      assert_equal 1, Battle.count
+      assert_equal 1, events.size
     end
 
     test "is idempotent on a second call" do
