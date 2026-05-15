@@ -40,6 +40,7 @@ Rails.application.routes.draw do
         resources :build_orders,    only: %i[destroy], path: "build"
         resources :training_orders, only: %i[create destroy], path: "train"
         resources :armies,          only: %i[index]
+        resources :battles,         only: %i[index]
       end
     end
 
@@ -52,6 +53,8 @@ Rails.application.routes.draw do
         post :merge
       end
     end
+
+    resources :battles, only: %i[show]
 
     namespace :admin do
       scope module: :auth do
@@ -74,6 +77,7 @@ Rails.application.routes.draw do
         member { post :cancel }
         scope module: :worlds do
           resources :invitations, only: %i[index create destroy]
+          resources :battles,     only: %i[index]
         end
       end
     end
