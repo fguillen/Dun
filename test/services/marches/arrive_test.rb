@@ -33,16 +33,74 @@ module Marches
       assert_equal "returning", @army.reload.status
     end
 
-    test "capture/claim_ruin park the army as engaged (Phase 7 stub)" do
-      %w[capture claim_ruin].each do |intent|
-        @army.update!(status: "home", location_region_id: @home.id)
-        order = Dispatch.call(army: @army, target_region: @target, intent: intent)
-        order.update!(arrives_at: 1.minute.ago)
+    test "capture against a wilderness node invokes Nodes::Capture (fights garrison)" do
+      node = create(:node, region: @target, garrison: { "levy" => 1 })
+      @army.update!(composition: { "knight" => 50, "catapult" => 1 })
+      order = Dispatch.call(army: @army, target_region: @target, intent: "capture")
+      order.update!(arrives_at: 1.minute.ago)
 
+      Arrive.call(march_order: order)
+
+      assert_equal 1, Battle.count
+      assert_nil Battle.last.defender_kingdom_id
+      node.reload
+      assert_equal @army.kingdom_id, node.owner_kingdom_id
+    end
+
+    test "capture without a catapult parks engaged + fires aborted notification" do
+      create(:node, region: @target)
+      order = Dispatch.call(army: @army, target_region: @target, intent: "capture")
+      order.update!(arrives_at: 1.minute.ago)
+
+      events = []
+      ActiveSupport::Notifications.subscribed(->(_, _, _, _, p) { events << p }, "dun.node.capture_aborted") do
         Arrive.call(march_order: order)
-        assert_equal "engaged", @army.reload.status
-        assert_equal @target.id, @army.location_region_id
       end
+
+      assert_equal "engaged", @army.reload.status
+      assert_equal 1, events.size
+      assert_equal "catapult_required", events.first[:reason]
+      assert_equal 0, Battle.count
+    end
+
+    test "capture on a region with no node parks home and fires aborted" do
+      events = []
+      order = Dispatch.call(army: @army, target_region: @target, intent: "capture")
+      order.update!(arrives_at: 1.minute.ago)
+
+      ActiveSupport::Notifications.subscribed(->(_, _, _, _, p) { events << p }, "dun.node.capture_aborted") do
+        Arrive.call(march_order: order)
+      end
+
+      assert_equal "home", @army.reload.status
+      assert_equal "no_node", events.first[:reason]
+    end
+
+    test "claim_ruin invokes Ruins::Claim" do
+      ruin = create(:ruin, :standard, region: @target, garrison: { "levy" => 1 })
+      @army.update!(composition: { "knight" => 50 })
+      order = Dispatch.call(army: @army, target_region: @target, intent: "claim_ruin")
+      order.update!(arrives_at: 1.minute.ago)
+
+      Arrive.call(march_order: order)
+
+      assert_equal 1, Battle.count
+      ruin.reload
+      assert ruin.claimed?
+      assert_equal @army.kingdom_id, ruin.claimed_by_kingdom_id
+    end
+
+    test "claim_ruin on a region without an unclaimed ruin fires aborted" do
+      events = []
+      order = Dispatch.call(army: @army, target_region: @target, intent: "claim_ruin")
+      order.update!(arrives_at: 1.minute.ago)
+
+      ActiveSupport::Notifications.subscribed(->(_, _, _, _, p) { events << p }, "dun.ruin.claim_aborted") do
+        Arrive.call(march_order: order)
+      end
+
+      assert_equal "home", @army.reload.status
+      assert_equal "no_unclaimed_ruin", events.first[:reason]
     end
 
     test "attack on an empty target parks the army home (no Battle row)" do

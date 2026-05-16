@@ -25,9 +25,10 @@ The docs go from **outside-in**: each file zooms one level deeper.
 6. **Tick engine** ([05-tick-engine.md](05-tick-engine.md)) — Phase 4: scheduled events, recurring jobs, the internal `dun.*` event bus.
 7. **Military** ([06-military.md](06-military.md)) — Phase 5: units catalog, training, army movement.
 8. **Combat** ([07-combat.md](07-combat.md)) — Phase 6: 6-round simulator, terrain combat, wall damage, battle reports.
-9. **API endpoint reference** ([api-endpoints.md](api-endpoints.md)) — every endpoint, cross-linked back to the phase that introduced it.
+9. **Nodes & Ruins** ([08-nodes-and-ruins.md](08-nodes-and-ruins.md)) — Phase 7: wilderness garrison combat, node capture, ruin claim, home hoards.
+10. **API endpoint reference** ([api-endpoints.md](api-endpoints.md)) — every endpoint, cross-linked back to the phase that introduced it.
 
-Phases 7–14 are not yet shipped; their slots in this doc set will fill in as the work lands.
+Phases 8–14 are not yet shipped; their slots in this doc set will fill in as the work lands.
 
 ---
 

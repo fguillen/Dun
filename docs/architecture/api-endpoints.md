@@ -149,6 +149,29 @@ See [07-combat.md](07-combat.md).
 | GET | `/v1/battles/:id` | — | single battle + all participants; player must own attacker or defender |
 | GET | `/v1/admin/worlds/:id/battles` | — | admin-only world archive of all battles |
 
+Wilderness battles (Phase 7) also surface here: a `Battle` row with `defender_kingdom_id: nil` represents a node capture or ruin claim.
+
+---
+
+## Phase 7 — Nodes, capture, ruins
+
+See [08-nodes-and-ruins.md](08-nodes-and-ruins.md).
+
+### Read surface
+
+| Method | Path | Service | Notes |
+|---|---|---|---|
+| GET | `/v1/worlds/:id/nodes` | — | all nodes on the world: wilderness, captured, home hoards |
+| GET | `/v1/worlds/:id/nodes/:id` | — | single node detail |
+
+### Mutation paths (driven by march intents, not direct endpoints)
+
+| Intent | Service chain | Notes |
+|---|---|---|
+| `capture` (wilderness) | `Marches::Arrive` → `Nodes::Capture` → `Combat::ResolveGarrison` | requires Catapult; transfers ownership on victory |
+| `capture` (owned) | `Marches::Arrive` → `Nodes::Attack` → `Combat::Resolve` (or walk-in) | PvP at the node region, undefended ⇒ instant take |
+| `claim_ruin` | `Marches::Arrive` → `Ruins::Claim` → `Combat::ResolveGarrison` | warehouse-capped cache grant; `dun.ruin.claimed` event |
+
 ---
 
 ## Health
@@ -164,7 +187,6 @@ See [07-combat.md](07-combat.md).
 
 | Phase | Endpoints (planned) | Status |
 |---|---|---|
-| Phase 7 | `/v1/worlds/:id/nodes`, `/v1/nodes/:id` | not shipped |
 | Phase 8 | `/v1/kingdoms/:id/caravans`, `/v1/worlds/:id/trade-ledger` | not shipped |
 | Phase 9 | `/v1/kingdoms/:id/wonder*`, `/v1/worlds/:id/wonders` | not shipped |
 | Phase 10 | `/v1/servers/:id/hall-of-fame`, `/v1/worlds/:id/archive`, `DELETE /v1/auth/account` | not shipped |

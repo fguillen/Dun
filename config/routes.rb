@@ -31,6 +31,7 @@ Rails.application.routes.draw do
           get :adjacent, on: :member
         end
         resources :ruins, only: %i[index]
+        resources :nodes, only: %i[index show]
       end
     end
 

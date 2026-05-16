@@ -295,22 +295,22 @@ Implements `§9`, `§16.3` combat rules.
 Implements `§7`, `§16.5` wilderness garrisons, `§16.11 Ruins` claim flow.
 
 ### Services
-- [ ] `Nodes::Capture.call(army, node)` — requires Catapult presence per `§9`; resolves vs garrison (one-time per `§16.5`); transfers ownership
-- [ ] `Nodes::Attack.call(army, node)` — contested capture from another player; resolves vs garrison
-- [ ] `Nodes::ProductionBonus.call(kingdom)` — sums flat bonuses (+120/+250/+500 per tier)
-- [ ] `Ruins::Claim.call(army, ruin)` — resolve vs garrison; instant grant to winner home stockpile, respect Warehouse cap (excess lost per `§16.11`); consume ruin; fire announcement
-- [ ] Home Hoard placement: every kingdom gets one Standard-tier node matched to weakest production type at spawn (`§16.5`)
+- [x] `Nodes::Capture.call(march_order:, node:)` — requires Catapult presence per `§9`; resolves vs garrison (one-time per `§16.5`); transfers ownership
+- [x] `Nodes::Attack.call(march_order:, node:)` — contested capture from another player; fights owner's region defenders via `Combat::Resolve` (or walks in if undefended)
+- [x] `Nodes::ProductionBonus.call(kingdom)` — sums flat bonuses (+120/+250/+500 per tier)
+- [x] `Ruins::Claim.call(march_order:, ruin:)` — resolve vs garrison; instant grant to winner home stockpile, respect Warehouse cap (excess lost per `§16.11` via `Stockpile::Apply`); ruin row preserved with `claimed_by_kingdom_id` + `claimed_at`; emits `dun.ruin.claimed`
+- [x] Home Hoard placement — already shipped in Phase 2 [`MapGeneration::PlaceSpawns#place_home_hoards`](app/services/map_generation/place_spawns.rb); Phase 7 added the §16.5 "weakest production type" assertion
 
 ### API endpoints
-- [ ] `GET  /v1/worlds/:id/nodes` (`node list`)
-- [ ] `GET  /v1/nodes/:id` (`node show`)
+- [x] `GET  /v1/worlds/:id/nodes` (`node list`)
+- [x] `GET  /v1/worlds/:id/nodes/:id` (`node show`)
 
 ### Tests
-- [ ] Catapult prerequisite for node capture
-- [ ] Garrison defeat is one-time (no respawn)
-- [ ] Ruin cache excess lost when Warehouse cap exceeded
-- [ ] World announcement fired on ruin claim
-- [ ] Home Hoard matches weakest production type
+- [x] Catapult prerequisite for node capture (and node attack)
+- [x] Garrison defeat is one-time (no respawn) — failed attempt leaves garrison intact, winning attempt clears it
+- [x] Ruin cache excess lost when Warehouse cap exceeded
+- [x] World announcement fired on ruin claim (`dun.ruin.claimed`)
+- [x] Home Hoard matches weakest production type (diversification across spawns)
 
 ---
 

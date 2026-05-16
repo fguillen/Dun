@@ -7,12 +7,13 @@ module Combat
     ROUT_THRESHOLD = 0.15
     ROUT_FLEE_RATE = 0.30
 
-    def self.call(march_order:, rng: Random.new)
-      new(march_order: march_order, rng: rng).call
+    def self.call(march_order:, defender_kingdom: nil, rng: Random.new)
+      new(march_order: march_order, defender_kingdom: defender_kingdom, rng: rng).call
     end
 
-    def initialize(march_order:, rng:)
+    def initialize(march_order:, defender_kingdom: nil, rng:)
       @march_order = march_order
+      @explicit_defender_kingdom = defender_kingdom
       @rng = rng
     end
 
@@ -21,7 +22,7 @@ module Combat
         attacker_army = Army.lock.find(@march_order.army_id)
         region = Region.find(@march_order.target_region_id)
 
-        defender_kingdom = find_defender_kingdom(region, attacker_army.kingdom_id)
+        defender_kingdom = @explicit_defender_kingdom || find_defender_kingdom(region, attacker_army.kingdom_id)
         return nil if defender_kingdom.nil?
 
         defender_armies = defender_kingdom.armies

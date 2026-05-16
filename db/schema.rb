@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_16_170002) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -57,7 +57,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_170002) do
     t.jsonb "casualties", default: {}, null: false
     t.datetime "created_at", null: false
     t.jsonb "ending_composition", default: {}, null: false
-    t.string "kingdom_id", null: false
+    t.string "kingdom_id"
     t.string "side", null: false
     t.jsonb "starting_composition", default: {}, null: false
     t.datetime "updated_at", null: false
@@ -70,7 +70,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_170002) do
   create_table "battles", id: :string, force: :cascade do |t|
     t.string "attacker_kingdom_id", null: false
     t.datetime "created_at", null: false
-    t.string "defender_kingdom_id", null: false
+    t.string "defender_kingdom_id"
     t.datetime "ended_at", null: false
     t.jsonb "log", default: [], null: false
     t.jsonb "loot", default: {}, null: false

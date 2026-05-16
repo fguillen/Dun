@@ -88,7 +88,22 @@ module MapGeneration
         assert_equal Node::TIER_BASE_RATE["standard"], node.base_rate
         assert node.is_home_hoard
         assert_includes Kingdom::RESOURCES, node.resource
+        assert_equal Node::WILDERNESS_GARRISONS["standard"].transform_keys(&:to_s),
+                     node.garrison.transform_keys(&:to_s)
       end
+    end
+
+    # §16.5: home hoard resource is "matched to the weakest production type at
+    # spawn". Operationally that means each spawn's home hoard avoids the
+    # resources already over-represented among nearby wilderness nodes — at
+    # placement time the only nodes the world has are home hoards from earlier
+    # spawns, so this is observable as resource diversification across spawns.
+    test "home hoard resources diversify across spawns (weakest-resource pick)" do
+      world, rng = build_world_through_terrain(players: 12)
+      result = PlaceSpawns.call(world: world, players_count: 12, rng: rng)
+      resources = result.home_hoards.map(&:resource).uniq.sort
+      assert resources.size >= 3,
+        "expected home hoard resources to diversify across 12 spawns, got #{resources.inspect}"
     end
 
     test "same seed reproduces identical spawn placement" do

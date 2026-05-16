@@ -878,6 +878,61 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /worlds/{world_id}/nodes:
+    parameters:
+      - in: path
+        name: world_id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listNodes
+      tags: [Player worlds]
+      summary: List nodes on a world
+      description: |
+        Lists every Node on the world, including wilderness nodes (with their
+        static NPC garrison composition), captured nodes (with `owner_kingdom_id`
+        set and an empty `garrison`), and home-hoard nodes (`is_home_hoard: true`).
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Node list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [nodes]
+                properties:
+                  nodes:
+                    type: array
+                    items: { $ref: "#/components/schemas/Node" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /worlds/{world_id}/nodes/{id}:
+    parameters:
+      - in: path
+        name: world_id
+        required: true
+        schema: { type: string }
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: showNode
+      tags: [Player worlds]
+      summary: Show a single node
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Node detail.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [node]
+                properties:
+                  node: { $ref: "#/components/schemas/Node" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ─── Phase 3: player kingdoms (buildings + stockpile) ──────────────────────
 
   /kingdoms/{id}:
@@ -1862,6 +1917,12 @@ components:
           properties:
             base_rate: { type: integer }
             owner_kingdom_id: { type: [string, "null"] }
+            region_id: { type: string }
+            region_name: { type: string }
+            garrison:
+              type: object
+              description: Wilderness garrison composition. Empty hash after capture (one-time per §16.5).
+              additionalProperties: { type: integer }
 
     RuinSummary:
       type: object

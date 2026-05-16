@@ -85,7 +85,40 @@ module Api
       assert response.parsed_body["ruins"].is_a?(Array)
     end
 
-    test "non-member receives 404 on map/region/ruins endpoints" do
+    test "GET /v1/worlds/:id/nodes lists nodes on the world" do
+      grace_world = create(:world, :grace, server: @server, seed: "0000000000003fc3", min_players: 16)
+      MapGeneration::Generate.call(world: grace_world, players_count: 16)
+
+      get "/v1/worlds/#{grace_world.id}/nodes", headers: auth_headers
+      assert_response :success
+      nodes = response.parsed_body["nodes"]
+      assert nodes.is_a?(Array)
+      assert nodes.any?
+      sample = nodes.first
+      %w[id region_id region_name resource tier base_rate is_home_hoard owner_kingdom_id garrison].each do |key|
+        assert sample.key?(key), "expected node serialization to include #{key}"
+      end
+    end
+
+    test "GET /v1/worlds/:id/nodes/:id returns a single node" do
+      grace_world = create(:world, :grace, server: @server, seed: "0000000000003fc3", min_players: 16)
+      MapGeneration::Generate.call(world: grace_world, players_count: 16)
+      node = grace_world.nodes.first
+
+      get "/v1/worlds/#{grace_world.id}/nodes/#{node.id}", headers: auth_headers
+      assert_response :success
+      assert_equal node.id, response.parsed_body.dig("node", "id")
+    end
+
+    test "GET /v1/worlds/:id/nodes/:id returns 404 for an unknown node" do
+      grace_world = create(:world, :grace, server: @server, seed: "0000000000003fc3", min_players: 16)
+      MapGeneration::Generate.call(world: grace_world, players_count: 16)
+
+      get "/v1/worlds/#{grace_world.id}/nodes/does_not_exist", headers: auth_headers
+      assert_response :not_found
+    end
+
+    test "non-member receives 404 on map/region/ruins/nodes endpoints" do
       stranger = create(:player)
       authenticate_as_player(stranger)
 
@@ -93,6 +126,9 @@ module Api
       assert_response :not_found
 
       get "/v1/worlds/#{@world.id}/ruins", headers: auth_headers
+      assert_response :not_found
+
+      get "/v1/worlds/#{@world.id}/nodes", headers: auth_headers
       assert_response :not_found
     end
 

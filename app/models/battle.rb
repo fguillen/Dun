@@ -6,7 +6,7 @@ class Battle < ApplicationRecord
   belongs_to :world
   belongs_to :region
   belongs_to :attacker_kingdom, class_name: "Kingdom"
-  belongs_to :defender_kingdom, class_name: "Kingdom"
+  belongs_to :defender_kingdom, class_name: "Kingdom", optional: true
   belongs_to :march_order, optional: true
   has_many :participants, class_name: "BattleParticipant", dependent: :destroy
 

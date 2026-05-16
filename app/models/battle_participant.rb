@@ -4,7 +4,7 @@ class BattleParticipant < ApplicationRecord
   SIDES = %w[attacker defender].freeze
 
   belongs_to :battle
-  belongs_to :kingdom
+  belongs_to :kingdom, optional: true
   belongs_to :army, optional: true
 
   validates :side, inclusion: { in: SIDES }

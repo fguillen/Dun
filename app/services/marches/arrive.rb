@@ -23,8 +23,10 @@ module Marches
           handle_scout(army, target)
         when "attack"
           handle_attack(army, target, order)
-        when "capture", "claim_ruin"
-          handle_combat_stub(army, target)
+        when "capture"
+          handle_capture(army, target, order)
+        when "claim_ruin"
+          handle_claim_ruin(army, target, order)
         when "caravan"
           handle_caravan_stub(army, target)
         end
@@ -67,10 +69,57 @@ module Marches
       nil
     end
 
-    # Phase 7 (nodes / ruins) replaces this stub for `capture` and
-    # `claim_ruin`. For now the army is parked at the target as `engaged`.
-    def handle_combat_stub(army, target)
+    # Phase 7 — `capture` arrives at a region containing a Node. Wilderness
+    # nodes are fought through `Nodes::Capture` (vs static garrison); enemy-
+    # owned nodes route through `Nodes::Attack` (PvP at the region, or walk-in
+    # if undefended). If the army has no catapult (or the target has no node)
+    # the attacker parks `engaged` and emits an aborted notification.
+    def handle_capture(army, target, order)
+      node = Node.where(region_id: target.id).first
+      if node.nil?
+        ActiveSupport::Notifications.instrument(
+          "dun.node.capture_aborted",
+          world_id: army.kingdom.world_id,
+          region_id: target.id,
+          army_id: army.id,
+          reason: "no_node"
+        )
+        army.update!(status: "home", location_region_id: target.id)
+        return nil
+      end
+
+      service = node.wilderness? ? Nodes::Capture : Nodes::Attack
+      service.call(march_order: order, node: node)
+    rescue Nodes::Capture::CatapultRequired, Nodes::Attack::CatapultRequired
       army.update!(status: "engaged", location_region_id: target.id)
+      ActiveSupport::Notifications.instrument(
+        "dun.node.capture_aborted",
+        world_id: army.kingdom.world_id,
+        region_id: target.id,
+        army_id: army.id,
+        reason: "catapult_required"
+      )
+      nil
+    end
+
+    # Phase 7 — `claim_ruin` arrives at a region containing a Ruin. The ruin's
+    # one-time garrison is fought via `Ruins::Claim`; cache is granted on
+    # victory (capped by warehouse, excess lost per §16.11).
+    def handle_claim_ruin(army, target, order)
+      ruin = Ruin.unclaimed.where(region_id: target.id).first
+      if ruin.nil?
+        ActiveSupport::Notifications.instrument(
+          "dun.ruin.claim_aborted",
+          world_id: army.kingdom.world_id,
+          region_id: target.id,
+          army_id: army.id,
+          reason: "no_unclaimed_ruin"
+        )
+        army.update!(status: "home", location_region_id: target.id)
+        return nil
+      end
+
+      Ruins::Claim.call(march_order: order, ruin: ruin)
     end
 
     # Phase 8 (caravans) plugs in cargo delivery / interception attribution.
