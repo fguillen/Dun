@@ -28,7 +28,9 @@ module Marches
         when "claim_ruin"
           handle_claim_ruin(army, target, order)
         when "caravan"
-          handle_caravan_stub(army, target)
+          handle_caravan(order)
+        when "caravan_return"
+          handle_caravan_return(army, target, order)
         end
 
         order.update!(arrived_at: Time.current)
@@ -122,9 +124,27 @@ module Marches
       Ruins::Claim.call(march_order: order, ruin: ruin)
     end
 
-    # Phase 8 (caravans) plugs in cargo delivery / interception attribution.
-    def handle_caravan_stub(army, target)
-      army.update!(status: "home", location_region_id: target.id)
+    # Phase 8 — `caravan` arrives at the receiver's home region. Caravans::Arrive
+    # routes to Deliver or Intercept (if any third-party army is camped at the
+    # destination). Deliver schedules a `caravan_return` march so the escort
+    # retraces home; Intercept resolves combat and consumes the cargo.
+    def handle_caravan(order)
+      caravan = Caravan.find_by(outbound_march_order_id: order.id)
+      return if caravan.nil?
+      Caravans::Arrive.call(caravan: caravan)
+    end
+
+    # Phase 8 — `caravan_return` is the escort retracing back to the sender.
+    # On arrival, Caravans::CompleteReturn merges its survivors into the
+    # sender's home army (and disposes of the temp escort Army row).
+    def handle_caravan_return(army, target, order)
+      caravan = Caravan.find_by(return_march_order_id: order.id)
+      if caravan.nil?
+        # No linked caravan (shouldn't happen) — fall back to a plain reinforce.
+        army.update!(status: "home", location_region_id: target.id)
+        return
+      end
+      Caravans::CompleteReturn.call(caravan: caravan)
     end
 
     def mark_scheduled_event_processed(order)

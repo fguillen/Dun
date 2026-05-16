@@ -319,24 +319,28 @@ Implements `§7`, `§16.5` wilderness garrisons, `§16.11 Ruins` claim flow.
 Implements `§12` (caravans, escort, interception) and `§17.2` (public ledger).
 
 ### Models
-- [ ] `Caravan` (world_id, sender_kingdom_id, receiver_kingdom_id, payload jsonb, escort_units jsonb, origin_region_id, destination_region_id, dispatched_at, arrives_at, status: in_transit|delivered|intercepted)
-- [ ] `TradeLedgerEntry` (world_id, caravan_id, sender_handle_at_send, receiver_handle, resource, amount, status, attacker_handle, recorded_at) — permanent for round, archived with world
+- [x] `Caravan` (world_id, sender_kingdom_id, receiver_kingdom_id, payload jsonb, escort_units jsonb, origin_region_id, destination_region_id, dispatched_at, arrives_at, delivered_at, intercepted_at, status: in_transit|delivered|intercepted, escort_army_id, outbound_march_order_id, return_march_order_id — operational FKs nullify on delete to preserve ledger history)
+- [x] `TradeLedgerEntry` (world_id, caravan_id, sender_handle_at_send, receiver_handle_at_send, resource, amount, status, attacker_handle, recorded_at) — permanent for round, archived with world
 
 ### Services
-- [ ] `Caravans::Dispatch.call(sender, receiver, payload, escort)` — validate capacity = sum of escort, deduct, schedule arrival
-- [ ] `Caravans::Intercept.call(caravan, attacker_army)` — combat between attacker and escort; on success, payload transferred to attacker home stockpile (capped by capacity), recorded with attribution per `§12`
-- [ ] `Caravans::Deliver.call(caravan)` — payload to receiver stockpile (Warehouse capped)
-- [ ] Ledger writes on every dispatch / delivery / interception
+- [x] `Caravans::Dispatch.call(sender_kingdom:, receiver_kingdom:, source_army:, payload:, escort_units:)` — validates capacity ≥ sum(payload), deducts stockpile, splits escort, dispatches `caravan`-intent march, writes in_transit ledger rows
+- [x] `Caravans::Arrive.call(caravan:)` — routes between Deliver and Intercept based on third-party hostile presence at destination (status: home/engaged); strongest by raw atk, ties by army.id
+- [x] `Caravans::Intercept.call(caravan:, attacker_army:)` — combat between escort (attacker) and hostile (defender) via `Combat::Resolve(defender_army:)` + `Combat::ApplyEscortOutcome`; on escort loss, payload → attacker home stockpile (capped by surviving capacity, then warehouse); escort win falls through to Deliver
+- [x] `Caravans::Deliver.call(caravan)` — payload → receiver stockpile (Warehouse capped, excess silently dropped per `§16.11`), schedules `caravan_return` retrace march
+- [x] `Caravans::CompleteReturn.call(caravan:)` — merges escort survivors into sender's home army at origin (or converts the escort in place if no host exists)
+- [x] `TradeLedger::Record.call(caravan:, status:, attacker_handle:)` — one row per non-zero resource on dispatch; status mutated in place on Deliver/Intercept
+- [x] `Combat::Resolve` extended to accept `defender_army:` override (bypass region-home-kingdom defender lookup + walls/home bonus); routes to `Combat::ApplyEscortOutcome` instead of `ApplyOutcome` (no loot transfer; cargo handled by Intercept)
 
 ### API endpoints
-- [ ] `POST /v1/kingdoms/:id/caravans` — `send <player> <amount> <resource>`
-- [ ] `GET  /v1/worlds/:id/trade-ledger` — pagination, optional `player`, `since` filters
+- [x] `POST /v1/kingdoms/:id/caravans` — `send <player> <amount> <resource>`
+- [x] `GET  /v1/worlds/:id/trade-ledger` — pagy-paginated, optional `player`, `since`, `limit`, `page` filters
 
 ### Tests
-- [ ] Escort capacity gates payload size
-- [ ] Interception attribution: both sender and interceptor visible (per `§12`); caravan interception always attributed even when scout intel is anonymous
-- [ ] Warehouse cap respected on delivery (excess lost? — keep consistent with Ruin claim)
-- [ ] Ledger immutable, world-scoped
+- [x] Escort capacity gates payload size
+- [x] Interception attribution: both sender and interceptor handles visible on ledger; deterministic strongest-hostile pick
+- [x] Warehouse cap respected on delivery (excess silently lost, consistent with Ruin claim)
+- [x] Ledger handles snapshotted at dispatch (immune to later handle renames), world-scoped
+- [x] Full lifecycle integration test: dispatch → DiscreteEventTick → deliver (or intercept) → return march merges escort
 
 ---
 

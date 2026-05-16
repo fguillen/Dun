@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_16_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_200001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -117,6 +117,35 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_180000) do
     t.integer "wall_hp"
     t.index ["kingdom_id", "kind"], name: "index_buildings_on_kingdom_id_and_kind", unique: true
     t.index ["kingdom_id"], name: "index_buildings_on_kingdom_id"
+  end
+
+  create_table "caravans", id: :string, force: :cascade do |t|
+    t.datetime "arrives_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "delivered_at"
+    t.string "destination_region_id", null: false
+    t.datetime "dispatched_at", null: false
+    t.string "escort_army_id"
+    t.jsonb "escort_units", default: {}, null: false
+    t.datetime "intercepted_at"
+    t.string "origin_region_id", null: false
+    t.string "outbound_march_order_id"
+    t.jsonb "payload", default: {}, null: false
+    t.string "receiver_kingdom_id", null: false
+    t.string "return_march_order_id"
+    t.string "sender_kingdom_id", null: false
+    t.string "status", default: "in_transit", null: false
+    t.datetime "updated_at", null: false
+    t.string "world_id", null: false
+    t.index ["destination_region_id"], name: "index_caravans_on_destination_region_id"
+    t.index ["escort_army_id"], name: "index_caravans_on_escort_army_id"
+    t.index ["origin_region_id"], name: "index_caravans_on_origin_region_id"
+    t.index ["outbound_march_order_id"], name: "index_caravans_on_outbound_march_order_id", unique: true
+    t.index ["receiver_kingdom_id"], name: "index_caravans_on_receiver_kingdom_id"
+    t.index ["return_march_order_id"], name: "index_caravans_on_return_march_order_id", unique: true
+    t.index ["sender_kingdom_id"], name: "index_caravans_on_sender_kingdom_id"
+    t.index ["world_id", "status"], name: "index_caravans_on_world_id_and_status"
+    t.index ["world_id"], name: "index_caravans_on_world_id"
   end
 
   create_table "data_migrations", primary_key: "version", id: :string, force: :cascade do |t|
@@ -308,6 +337,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_180000) do
     t.index ["slug"], name: "index_servers_on_slug", unique: true
   end
 
+  create_table "trade_ledger_entries", id: :string, force: :cascade do |t|
+    t.bigint "amount", null: false
+    t.string "attacker_handle"
+    t.string "caravan_id", null: false
+    t.datetime "created_at", null: false
+    t.string "receiver_handle_at_send", null: false
+    t.datetime "recorded_at", null: false
+    t.string "resource", null: false
+    t.string "sender_handle_at_send", null: false
+    t.string "status", null: false
+    t.datetime "updated_at", null: false
+    t.string "world_id", null: false
+    t.index ["caravan_id", "resource"], name: "index_trade_ledger_entries_on_caravan_id_and_resource", unique: true
+    t.index ["caravan_id"], name: "index_trade_ledger_entries_on_caravan_id"
+    t.index ["world_id", "attacker_handle"], name: "index_trade_ledger_entries_on_world_id_and_attacker_handle"
+    t.index ["world_id", "receiver_handle_at_send"], name: "idx_on_world_id_receiver_handle_at_send_56e04c7fda"
+    t.index ["world_id", "recorded_at"], name: "index_trade_ledger_entries_on_world_id_and_recorded_at"
+    t.index ["world_id", "sender_handle_at_send"], name: "idx_on_world_id_sender_handle_at_send_d6c405a107"
+    t.index ["world_id"], name: "index_trade_ledger_entries_on_world_id"
+  end
+
   create_table "training_orders", id: :string, force: :cascade do |t|
     t.string "building_id", null: false
     t.string "building_kind", null: false
@@ -374,6 +424,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_180000) do
   add_foreign_key "build_orders", "buildings"
   add_foreign_key "build_orders", "kingdoms"
   add_foreign_key "buildings", "kingdoms"
+  add_foreign_key "caravans", "armies", column: "escort_army_id", on_delete: :nullify
+  add_foreign_key "caravans", "kingdoms", column: "receiver_kingdom_id"
+  add_foreign_key "caravans", "kingdoms", column: "sender_kingdom_id"
+  add_foreign_key "caravans", "march_orders", column: "outbound_march_order_id", on_delete: :nullify
+  add_foreign_key "caravans", "march_orders", column: "return_march_order_id", on_delete: :nullify
+  add_foreign_key "caravans", "regions", column: "destination_region_id"
+  add_foreign_key "caravans", "regions", column: "origin_region_id"
+  add_foreign_key "caravans", "worlds"
   add_foreign_key "kingdoms", "player_profiles"
   add_foreign_key "kingdoms", "regions", column: "home_region_id"
   add_foreign_key "kingdoms", "worlds"
@@ -395,6 +453,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_180000) do
   add_foreign_key "server_memberships", "players"
   add_foreign_key "server_memberships", "servers"
   add_foreign_key "servers", "admins", column: "owner_admin_id"
+  add_foreign_key "trade_ledger_entries", "caravans"
+  add_foreign_key "trade_ledger_entries", "worlds"
   add_foreign_key "training_orders", "buildings"
   add_foreign_key "training_orders", "kingdoms"
   add_foreign_key "world_invitations", "admins", column: "invited_by_admin_id"

@@ -7,13 +7,14 @@ module Combat
     ROUT_THRESHOLD = 0.15
     ROUT_FLEE_RATE = 0.30
 
-    def self.call(march_order:, defender_kingdom: nil, rng: Random.new)
-      new(march_order: march_order, defender_kingdom: defender_kingdom, rng: rng).call
+    def self.call(march_order:, defender_kingdom: nil, defender_army: nil, rng: Random.new)
+      new(march_order: march_order, defender_kingdom: defender_kingdom, defender_army: defender_army, rng: rng).call
     end
 
-    def initialize(march_order:, defender_kingdom: nil, rng:)
+    def initialize(march_order:, defender_kingdom: nil, defender_army: nil, rng:)
       @march_order = march_order
       @explicit_defender_kingdom = defender_kingdom
+      @explicit_defender_army = defender_army
       @rng = rng
     end
 
@@ -22,23 +23,33 @@ module Combat
         attacker_army = Army.lock.find(@march_order.army_id)
         region = Region.find(@march_order.target_region_id)
 
-        defender_kingdom = @explicit_defender_kingdom || find_defender_kingdom(region, attacker_army.kingdom_id)
-        return nil if defender_kingdom.nil?
+        if @explicit_defender_army
+          defender_armies = [ Army.lock.find(@explicit_defender_army.id) ].reject(&:empty?)
+          return nil if defender_armies.empty?
+          defender_kingdom = defender_armies.first.kingdom
+        else
+          defender_kingdom = @explicit_defender_kingdom || find_defender_kingdom(region, attacker_army.kingdom_id)
+          return nil if defender_kingdom.nil?
 
-        defender_armies = defender_kingdom.armies
-          .where(location_region_id: region.id, status: %w[home engaged])
-          .lock
-          .to_a
-        return nil if defender_armies.empty? || defender_armies.all?(&:empty?)
+          defender_armies = defender_kingdom.armies
+            .where(location_region_id: region.id, status: %w[home engaged])
+            .lock
+            .to_a
+          return nil if defender_armies.empty? || defender_armies.all?(&:empty?)
 
-        defender_armies.reject!(&:empty?)
+          defender_armies.reject!(&:empty?)
+        end
+
         defender_aggregate = aggregate_compositions(defender_armies)
         return nil if defender_aggregate.values.all?(&:zero?)
 
         walls_building = nil
         walls_level = 0
         walls_hp = 0
-        is_home = region.id == defender_kingdom.home_region_id
+        # An escort defending its caravan is in the open: no walls, no home bonus.
+        # Only apply walls/home when the defender is genuinely the home kingdom
+        # of this region (the normal PvP arrival case).
+        is_home = @explicit_defender_army.nil? && region.id == defender_kingdom.home_region_id
         if is_home
           walls_building = defender_kingdom.buildings.find_by(kind: "walls")
           if walls_building && walls_building.level > 0
@@ -109,7 +120,11 @@ module Combat
           )
         end
 
-        ApplyOutcome.call(battle: battle, state: state, walls_building: walls_building)
+        if @explicit_defender_army
+          ApplyEscortOutcome.call(battle: battle)
+        else
+          ApplyOutcome.call(battle: battle, state: state, walls_building: walls_building)
+        end
 
         ActiveSupport::Notifications.instrument(
           "dun.battle.resolved",

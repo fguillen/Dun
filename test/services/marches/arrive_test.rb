@@ -153,6 +153,63 @@ module Marches
       assert event.reload.processed_at.present?
     end
 
+    # Phase 8 — caravan intent routes to Caravans::Arrive (which delivers when
+    # the destination is friendly). caravan_return routes to CompleteReturn.
+    test "caravan intent routes to Caravans::Arrive (delivery happy path)" do
+      server   = @world.server
+      receiver_profile = create(:player_profile, server: server, handle: "Receiver")
+      receiver = create(:kingdom, :with_buildings, world: @world, player_profile: receiver_profile,
+        home_region: @target,
+        stockpiles: { "gold" => 0, "wood" => 0, "stone" => 0, "iron" => 0, "checkpoint_at" => Time.current.iso8601 })
+      sender = @army.kingdom
+      sender_profile = create(:player_profile, server: server, handle: "Sender")
+      sender.update!(player_profile: sender_profile)
+      sender.update!(stockpiles: { "gold" => 500, "wood" => 0, "stone" => 0, "iron" => 0, "checkpoint_at" => Time.current.iso8601 })
+
+      caravan = Caravans::Dispatch.call(
+        sender_kingdom: sender, receiver_kingdom: receiver,
+        source_army: @army,
+        payload: { "gold" => 100 }, escort_units: { "knight" => 2 })
+
+      order = caravan.outbound_march_order
+      order.update!(arrives_at: 1.minute.ago)
+
+      Arrive.call(march_order: order)
+      assert_equal "delivered", caravan.reload.status
+    end
+
+    test "caravan_return intent routes to Caravans::CompleteReturn" do
+      server   = @world.server
+      receiver_profile = create(:player_profile, server: server, handle: "Receiver")
+      receiver = create(:kingdom, :with_buildings, world: @world, player_profile: receiver_profile,
+        home_region: @target,
+        stockpiles: { "gold" => 0, "wood" => 0, "stone" => 0, "iron" => 0, "checkpoint_at" => Time.current.iso8601 })
+      sender = @army.kingdom
+      sender_profile = create(:player_profile, server: server, handle: "Sender")
+      sender.update!(player_profile: sender_profile)
+      sender.update!(stockpiles: { "gold" => 500, "wood" => 0, "stone" => 0, "iron" => 0, "checkpoint_at" => Time.current.iso8601 })
+
+      caravan = Caravans::Dispatch.call(
+        sender_kingdom: sender, receiver_kingdom: receiver,
+        source_army: @army,
+        payload: { "gold" => 100 }, escort_units: { "knight" => 2 })
+
+      outbound = caravan.outbound_march_order
+      outbound.update!(arrives_at: 1.minute.ago)
+      Arrive.call(march_order: outbound)
+
+      caravan.reload
+      return_order = caravan.return_march_order
+      assert return_order
+      return_order.update!(arrives_at: 1.minute.ago)
+
+      escort_id = caravan.escort_army_id
+      Arrive.call(march_order: return_order)
+
+      # Escort merged into sender's remaining home army (or converted in place).
+      refute Army.exists?(escort_id) if escort_id  # merged or destroyed
+    end
+
     test "emits dun.march_order.arrived" do
       order = Dispatch.call(army: @army, target_region: @target, intent: "reinforce")
       order.update!(arrives_at: 1.minute.ago)

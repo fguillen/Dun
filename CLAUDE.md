@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Game mechanics source of truth**: [docs/dun Game Design Document.v3.md](docs/dun%20Game%20Design%20Document.v3.md). Section refs like `§17.1` point at that doc.
 - **HTTP API contract**: [docs/openapi.yaml](docs/openapi.yaml) — OpenAPI 3.1 spec covering everything implemented so far. The CLI gem and any future integration consume only this surface.
 - **Backend architecture**: [docs/architecture/](docs/architecture/) — how the backend is built, phase by phase. Start at [docs/architecture/README.md](docs/architecture/README.md) for the system overview and an index of the per-phase chapters. When a phase ships, add a new chapter and update the index.
-- **Implementation roadmap**: [TODO.md](TODO.md). Phases 1 (Identity, Auth, Server Membership), 2 (World Lifecycle & Map Generation), 3 (Resources, Buildings & Build Queue), 4 (Tick Engine & Time Model), 5 (Military: Units, Training, March), 6 (Combat Resolution & Battle Reports), and 7 (Nodes, Capture, Ruins) are complete; Phase 8 (Trade, Caravans & Ledger) is next.
+- **Implementation roadmap**: [TODO.md](TODO.md). Phases 1 (Identity, Auth, Server Membership), 2 (World Lifecycle & Map Generation), 3 (Resources, Buildings & Build Queue), 4 (Tick Engine & Time Model), 5 (Military: Units, Training, March), 6 (Combat Resolution & Battle Reports), 7 (Nodes, Capture, Ruins), and 8 (Trade, Caravans & Ledger) are complete; Phase 9 (Wonder Mechanics) is next.
 
 ## Stack
 

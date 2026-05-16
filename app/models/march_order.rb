@@ -1,7 +1,7 @@
 class MarchOrder < ApplicationRecord
   include HasUlid
 
-  INTENTS = %w[attack reinforce scout capture claim_ruin caravan].freeze
+  INTENTS = %w[attack reinforce scout capture claim_ruin caravan caravan_return].freeze
 
   belongs_to :army
   belongs_to :origin_region, class_name: "Region"

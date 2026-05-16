@@ -179,5 +179,52 @@ module Combat
       battle = Resolve.call(march_order: order, rng: Random.new(2))
       assert_includes %w[defender_victory attacker_rout], battle.outcome
     end
+
+    # Phase 8 — caravan interception. The escort is a single explicit defender
+    # in the open: no walls bonus, no home bonus, even when the fight happens
+    # at the defender kingdom's home region.
+    test "defender_army override bypasses region defender lookup and walls/home bonus" do
+      # Place a strong wall + buildings at @defender_home and put the escort
+      # army there owned by a *third* kingdom (the caravan sender). The escort
+      # should fight with no walls/home bonus even though we're at @defender_home.
+      # Tiny attacker, big escort: escort survives the fight so the participant
+      # army_id stays linked (not nullified by destroy).
+      attacker_army = create(:army, kingdom: @attacker, location_region: @attacker_home,
+        composition: { "scout" => 1 })
+      escort_kingdom = create(:kingdom, :with_buildings, world: @world,
+        home_region: create(:region, world: @world, terrain: "plains", name: "EscortHome"))
+      escort_army = create(:army, kingdom: escort_kingdom, location_region: @defender_home,
+        status: "marching", composition: { "pikeman" => 100 })
+
+      # @defender has walls L5 at @defender_home — should be ignored when defender_army overrides.
+      @defender.buildings.find_by(kind: "walls").update!(level: 5)
+
+      order = dispatch_attack(attacker_army, @defender_home)
+      battle = Resolve.call(march_order: order, defender_army: escort_army, rng: Random.new(11))
+
+      assert battle
+      # The battle's defender kingdom is the escort owner, NOT the region's home kingdom.
+      assert_equal escort_kingdom.id, battle.defender_kingdom_id
+      # The defender participant is the escort army only — not the home kingdom's forces.
+      defender_participants = battle.participants.where(side: "defender")
+      assert_equal 1, defender_participants.size
+      assert_equal escort_kingdom.id, defender_participants.first.kingdom_id
+      assert_equal escort_army.id, defender_participants.first.army_id
+
+      # Sanity: walls level on the home defender is unchanged (we didn't fight them).
+      assert_equal 5, @defender.buildings.find_by(kind: "walls").reload.level
+    end
+
+    test "defender_army returns nil when the escort is empty" do
+      attacker_army = create(:army, kingdom: @attacker, location_region: @attacker_home,
+        composition: { "knight" => 5 })
+      escort_kingdom = create(:kingdom, world: @world,
+        home_region: create(:region, world: @world, terrain: "plains", name: "EscortHome2"))
+      empty_escort = create(:army, kingdom: escort_kingdom, location_region: @defender_home,
+        status: "marching", composition: { "levy" => 0 })
+
+      order = dispatch_attack(attacker_army, @defender_home)
+      assert_nil Resolve.call(march_order: order, defender_army: empty_escort, rng: Random.new(1))
+    end
   end
 end

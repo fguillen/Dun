@@ -174,6 +174,31 @@ See [08-nodes-and-ruins.md](08-nodes-and-ruins.md).
 
 ---
 
+## Phase 8 — Trade & caravans
+
+See [09-trade-and-caravans.md](09-trade-and-caravans.md).
+
+### Mutation surface
+
+| Method | Path | Service | Notes |
+|---|---|---|---|
+| POST | `/v1/kingdoms/:kingdom_id/caravans` | `Caravans::Dispatch` | body: `{receiver_handle, source_army_id, payload, escort_units}` |
+
+### Read surface
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/v1/worlds/:world_id/trade-ledger` | paginated newest-first; filters: `?player=<handle>`, `?since=<Nh|Nd|...>`, `?limit`, `?page` |
+
+### Mutation paths (driven by march intents, not direct endpoints)
+
+| Intent | Service chain | Notes |
+|---|---|---|
+| `caravan` | `Marches::Arrive` → `Caravans::Arrive` → `Caravans::Deliver` _or_ `Caravans::Intercept` | hostile at destination ⇒ interception; otherwise delivery + scheduled return |
+| `caravan_return` | `Marches::Arrive` → `Caravans::CompleteReturn` | merges escort survivors into sender's home army |
+
+---
+
 ## Health
 
 | Method | Path | Notes |
@@ -187,7 +212,6 @@ See [08-nodes-and-ruins.md](08-nodes-and-ruins.md).
 
 | Phase | Endpoints (planned) | Status |
 |---|---|---|
-| Phase 8 | `/v1/kingdoms/:id/caravans`, `/v1/worlds/:id/trade-ledger` | not shipped |
 | Phase 9 | `/v1/kingdoms/:id/wonder*`, `/v1/worlds/:id/wonders` | not shipped |
 | Phase 10 | `/v1/servers/:id/hall-of-fame`, `/v1/worlds/:id/archive`, `DELETE /v1/auth/account` | not shipped |
 | Phase 11 | `/v1/servers/:id/reports`, `/v1/admin/servers/:id/reports`, `/v1/admin/servers/:id/audit`, `/v1/admin/servers/:id/rate_limits` | not shipped |

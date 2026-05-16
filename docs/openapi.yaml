@@ -76,6 +76,8 @@ tags:
     description: Informational invitations attached to a world; do NOT gate admission (server access still rules).
   - name: Player kingdoms
     description: Per-kingdom dashboard, building queue, and stockpile reads (§6, §10, §16.4).
+  - name: Player trade
+    description: Caravan dispatch and per-world public trade ledger (§12, §17.2).
 
 security: []   # endpoints declare their own security requirements
 
@@ -1633,6 +1635,133 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # ─── Phase 8: trade caravans + public ledger ───────────────────────────────
+
+  /kingdoms/{kingdom_id}/caravans:
+    parameters:
+      - in: path
+        name: kingdom_id
+        required: true
+        schema: { type: string }
+    post:
+      operationId: dispatchCaravan
+      tags: [Player trade]
+      summary: Dispatch a caravan from this kingdom to another in the same world
+      description: |
+        Splits `escort_units` off the caller-specified `source_army_id` (must be
+        home at the sender's home region), deducts `payload` from the sender
+        stockpile, and dispatches the escort as a march with intent `caravan`.
+        On arrival, the caravan either delivers to the receiver or — if a
+        third-party kingdom has an army camped at the destination region — is
+        intercepted (the strongest hostile fights the escort).
+
+        Constraints:
+        - `escort_units` total carrying capacity must be ≥ sum of `payload`.
+        - Sender and receiver must be in the same world; self-trade rejected.
+        - Receiver kingdom must not be eliminated.
+      security: [{ playerBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receiver_handle, source_army_id, payload, escort_units]
+              properties:
+                receiver_handle: { type: string, description: "Receiver player's handle on this server." }
+                source_army_id:  { type: string, description: "Army the escort is split off of." }
+                payload:
+                  type: object
+                  description: Resources to send. Keys are `gold|wood|stone|iron`; values are positive integers.
+                  additionalProperties: { type: integer, minimum: 1 }
+                escort_units:
+                  type: object
+                  description: Units forming the escort. Keys are unit kinds (`levy`, `archer`, ...); values are positive integers.
+                  additionalProperties: { type: integer, minimum: 1 }
+      responses:
+        "201":
+          description: Caravan dispatched.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Caravan" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Kingdom or source army not visible to caller.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "422":
+          description: |
+            Validation rejected. Possible `error.code`: `receiver_not_found`,
+            `cross_world`, `self_trade`, `receiver_eliminated`,
+            `insufficient_capacity`, `invalid_payload`, `insufficient_resources`,
+            `army_not_home`, `insufficient_units`, `empty_escort`, `unreachable`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /worlds/{world_id}/trade-ledger:
+    parameters:
+      - in: path
+        name: world_id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listTradeLedger
+      tags: [Player trade]
+      summary: Public per-world trade ledger (caravan dispatches, deliveries, interceptions)
+      description: |
+        World-scoped, newest first. Status mutates in place as caravans
+        progress (`in_transit` → `delivered` or `intercepted`). Handles are
+        snapshotted at dispatch time and remain stable even if a player later
+        changes their handle. Visible to any member of the world's server.
+
+        Filters:
+        - `?player=<handle>` — matches sender, receiver, OR attacker handle.
+        - `?since=<duration>` — `Nh`, `Nd`, `Nw`, etc. Defaults to no lower bound.
+        - `?limit=<n>` — page size (max 100; default 25).
+        - `?page=<n>` — 1-based page number.
+      security: [{ playerBearer: [] }]
+      parameters:
+        - in: query
+          name: player
+          required: false
+          schema: { type: string }
+        - in: query
+          name: since
+          required: false
+          schema: { type: string, example: "24h" }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - in: query
+          name: page
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+      responses:
+        "200":
+          description: Ledger page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries, pagy]
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/TradeLedgerEntry" }
+                  pagy:
+                    type: object
+                    required: [count, page, limit, pages]
+                    properties:
+                      count: { type: integer, minimum: 0 }
+                      page:  { type: integer, minimum: 1 }
+                      limit: { type: integer, minimum: 1 }
+                      pages: { type: integer, minimum: 0 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 # ═══════════════════════════════════════════════════════════════════════════════
 
 components:
@@ -2204,3 +2333,63 @@ components:
         starting_composition: { $ref: "#/components/schemas/Composition" }
         ending_composition: { $ref: "#/components/schemas/Composition" }
         casualties: { $ref: "#/components/schemas/Composition" }
+
+    # ─── Phase 8: trade caravans + public ledger ─────────────────────────────
+
+    Caravan:
+      type: object
+      required:
+        [ id, world_id, sender_kingdom_id, receiver_kingdom_id,
+          origin_region_id, destination_region_id, payload, escort_units,
+          status, dispatched_at, arrives_at ]
+      properties:
+        id: { type: string }
+        world_id: { type: string }
+        sender_kingdom_id: { type: string }
+        receiver_kingdom_id: { type: string }
+        origin_region_id: { type: string }
+        destination_region_id: { type: string }
+        payload:
+          type: object
+          description: Resources carried. Keys are `gold|wood|stone|iron`.
+          additionalProperties: { type: integer, minimum: 0 }
+        escort_units:
+          type: object
+          description: Escort army composition at dispatch (snapshot).
+          additionalProperties: { type: integer, minimum: 0 }
+        status:
+          type: string
+          enum: [in_transit, delivered, intercepted]
+          description: |
+            `in_transit` after dispatch; transitions to `delivered` if the
+            escort reaches the destination unopposed (or wins the
+            interception combat), or `intercepted` if a third-party hostile
+            wins.
+        dispatched_at: { type: string, format: date-time }
+        arrives_at:    { type: string, format: date-time }
+        delivered_at:   { type: [string, "null"], format: date-time }
+        intercepted_at: { type: [string, "null"], format: date-time }
+        outbound_march_order_id: { type: [string, "null"] }
+        return_march_order_id:   { type: [string, "null"] }
+
+    TradeLedgerEntry:
+      type: object
+      required: [id, caravan_id, sender_handle, receiver_handle, resource, amount, status, recorded_at]
+      description: |
+        One row per non-zero resource per caravan. Handles are snapshotted at
+        dispatch and remain stable even if a player later changes their handle.
+        `attacker_handle` is set only when `status` is `intercepted`.
+      properties:
+        id: { type: string }
+        caravan_id: { type: string }
+        sender_handle:   { type: string, description: "Sender handle snapshotted at dispatch." }
+        receiver_handle: { type: string, description: "Receiver handle snapshotted at dispatch." }
+        attacker_handle: { type: [string, "null"], description: "Interceptor handle (intercepted entries only)." }
+        resource:
+          type: string
+          enum: [gold, wood, stone, iron]
+        amount: { type: integer, minimum: 0 }
+        status:
+          type: string
+          enum: [in_transit, delivered, intercepted]
+        recorded_at: { type: string, format: date-time }

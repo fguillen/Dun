@@ -1,6 +1,7 @@
 module Api
   class BaseController < ApplicationController
     include Authentication
+    include Pagy::Backend
 
     rescue_from ActiveRecord::RecordNotFound, with: :handle_not_found
     rescue_from ActiveRecord::RecordInvalid, with: :handle_invalid

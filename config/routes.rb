@@ -27,6 +27,7 @@ Rails.application.routes.draw do
       member { post :join }
       scope module: :worlds do
         get  "map" => "map#index"
+        get  "trade-ledger" => "trade_ledger#index"
         resources :regions, only: %i[show] do
           get :adjacent, on: :member
         end
@@ -42,6 +43,7 @@ Rails.application.routes.draw do
         resources :training_orders, only: %i[create destroy], path: "train"
         resources :armies,          only: %i[index]
         resources :battles,         only: %i[index]
+        resources :caravans,        only: %i[create]
       end
     end
 
