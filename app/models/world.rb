@@ -10,6 +10,7 @@ class World < ApplicationRecord
   has_many :ruins, through: :regions
   has_many :kingdoms, dependent: :destroy
   belongs_to :winner_kingdom, class_name: "Kingdom", optional: true
+  has_one :round_archive, dependent: :destroy
 
   normalizes :slug, with: ->(slug) { slug.to_s.strip.downcase }
 

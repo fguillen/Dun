@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_16_210001) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_17_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -157,6 +157,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_210001) do
     t.string "home_region_id"
     t.datetime "joined_at", null: false
     t.jsonb "metadata", default: {}, null: false
+    t.integer "peak_nodes", default: 0, null: false
     t.string "player_profile_id", null: false
     t.jsonb "stockpiles", default: {"gold" => 0, "iron" => 0, "wood" => 0, "stone" => 0}, null: false
     t.datetime "updated_at", null: false
@@ -165,6 +166,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_210001) do
     t.index ["player_profile_id"], name: "index_kingdoms_on_player_profile_id"
     t.index ["world_id", "player_profile_id"], name: "index_kingdoms_on_world_id_and_player_profile_id", unique: true
     t.index ["world_id"], name: "index_kingdoms_on_world_id"
+  end
+
+  create_table "leaderboard_snapshots", id: :string, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.jsonb "entries", default: [], null: false
+    t.string "kind", null: false
+    t.string "server_id", null: false
+    t.datetime "snapshot_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["server_id", "kind"], name: "index_leaderboard_snapshots_on_server_id_and_kind", unique: true
+    t.index ["server_id"], name: "index_leaderboard_snapshots_on_server_id"
   end
 
   create_table "magic_links", id: :string, force: :cascade do |t|
@@ -216,13 +228,33 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_210001) do
     t.index ["region_id"], name: "index_nodes_on_region_id"
   end
 
+  create_table "player_profile_stats", id: :string, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "peak_nodes", default: 0, null: false
+    t.string "player_profile_id", null: false
+    t.integer "raids_defended", default: 0, null: false
+    t.integer "raids_launched", default: 0, null: false
+    t.integer "raids_won_defense", default: 0, null: false
+    t.integer "raids_won_offense", default: 0, null: false
+    t.bigint "resources_looted", default: 0, null: false
+    t.integer "rounds_played", default: 0, null: false
+    t.integer "rounds_won", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.integer "wonders_completed", default: 0, null: false
+    t.integer "wonders_destroyed", default: 0, null: false
+    t.index ["peak_nodes"], name: "index_player_profile_stats_on_peak_nodes"
+    t.index ["player_profile_id"], name: "index_player_profile_stats_on_player_profile_id", unique: true
+    t.index ["rounds_played"], name: "index_player_profile_stats_on_rounds_played"
+    t.index ["rounds_won"], name: "index_player_profile_stats_on_rounds_won"
+    t.index ["wonders_destroyed"], name: "index_player_profile_stats_on_wonders_destroyed"
+  end
+
   create_table "player_profiles", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.citext "handle"
     t.string "player_id", null: false
     t.string "real_name"
     t.string "server_id", null: false
-    t.jsonb "stats", default: {}, null: false
     t.datetime "updated_at", null: false
     t.index ["player_id"], name: "index_player_profiles_on_player_id"
     t.index ["server_id", "handle"], name: "index_player_profiles_on_server_id_and_handle", unique: true, where: "(handle IS NOT NULL)"
@@ -230,11 +262,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_210001) do
     t.index ["server_id"], name: "index_player_profiles_on_server_id"
   end
 
+  create_table "player_titles", id: :string, force: :cascade do |t|
+    t.datetime "awarded_at", null: false
+    t.datetime "created_at", null: false
+    t.string "kind", default: "champion", null: false
+    t.string "player_profile_id", null: false
+    t.datetime "updated_at", null: false
+    t.string "world_id", null: false
+    t.index ["player_profile_id", "world_id", "kind"], name: "index_player_titles_unique", unique: true
+    t.index ["player_profile_id"], name: "index_player_titles_on_player_profile_id"
+    t.index ["world_id"], name: "index_player_titles_on_world_id"
+  end
+
   create_table "players", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.datetime "deleted_at"
     t.citext "email", null: false
     t.string "name", null: false
     t.datetime "updated_at", null: false
+    t.index ["deleted_at"], name: "index_players_on_deleted_at"
     t.index ["email"], name: "index_players_on_email", unique: true
   end
 
@@ -261,6 +307,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_210001) do
     t.index ["world_id", "spawn_eligible"], name: "index_regions_on_world_id_and_spawn_eligible"
     t.index ["world_id", "terrain"], name: "index_regions_on_world_id_and_terrain"
     t.index ["world_id"], name: "index_regions_on_world_id"
+  end
+
+  create_table "retired_handles", id: :string, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "freed_at", null: false
+    t.citext "handle_lower", null: false
+    t.string "server_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["server_id", "handle_lower"], name: "index_retired_handles_on_server_id_and_handle_lower", unique: true
+    t.index ["server_id"], name: "index_retired_handles_on_server_id"
+  end
+
+  create_table "round_archives", id: :string, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "ended_at", null: false
+    t.jsonb "frozen_state", default: {}, null: false
+    t.datetime "updated_at", null: false
+    t.string "winner_kingdom_id"
+    t.string "wonder_name"
+    t.string "world_id", null: false
+    t.index ["winner_kingdom_id"], name: "index_round_archives_on_winner_kingdom_id"
+    t.index ["world_id"], name: "index_round_archives_on_world_id", unique: true
   end
 
   create_table "ruins", id: :string, force: :cascade do |t|
@@ -474,15 +542,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_210001) do
   add_foreign_key "kingdoms", "player_profiles"
   add_foreign_key "kingdoms", "regions", column: "home_region_id"
   add_foreign_key "kingdoms", "worlds"
+  add_foreign_key "leaderboard_snapshots", "servers"
   add_foreign_key "march_orders", "armies"
   add_foreign_key "march_orders", "regions", column: "origin_region_id"
   add_foreign_key "march_orders", "regions", column: "target_region_id"
   add_foreign_key "nodes", "regions"
+  add_foreign_key "player_profile_stats", "player_profiles"
   add_foreign_key "player_profiles", "players"
   add_foreign_key "player_profiles", "servers"
+  add_foreign_key "player_titles", "player_profiles"
+  add_foreign_key "player_titles", "worlds"
   add_foreign_key "region_adjacencies", "regions", column: "region_a_id"
   add_foreign_key "region_adjacencies", "regions", column: "region_b_id"
   add_foreign_key "regions", "worlds"
+  add_foreign_key "retired_handles", "servers"
+  add_foreign_key "round_archives", "kingdoms", column: "winner_kingdom_id"
+  add_foreign_key "round_archives", "worlds"
   add_foreign_key "ruins", "regions"
   add_foreign_key "scheduled_events", "worlds"
   add_foreign_key "server_accesses", "servers"

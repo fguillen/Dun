@@ -24,6 +24,7 @@ module Wonders
         )
 
         cancel_pending_events(wonder)
+        Wreckers::Attribute.call(wonder: wonder) if @reason == "damage"
 
         ActiveSupport::Notifications.instrument(
           "dun.wonder.destroyed",

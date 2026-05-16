@@ -50,6 +50,7 @@ module Nodes
 
     def transfer_ownership(new_owner_id, battle:)
       @node.update!(owner_kingdom_id: new_owner_id)
+      Kingdoms::BumpPeakNodes.call(kingdom_id: new_owner_id)
       ActiveSupport::Notifications.instrument(
         "dun.node.captured",
         world_id: @node.region.world_id,

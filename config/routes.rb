@@ -10,12 +10,14 @@ Rails.application.routes.draw do
       post   "auth/exchange"   => "magic_links#exchange", as: :auth_exchange
       get    "auth/keys"       => "keys#index",          as: :auth_keys
       delete "auth/keys/:id"   => "keys#destroy",        as: :auth_key
+      delete "auth/account"    => "account#destroy",     as: :auth_account
     end
 
     resources :servers, only: %i[index] do
       member do
         post  :join
         patch "me" => "servers/me#update"
+        get   "hall-of-fame" => "servers/hall_of_fame#show"
       end
 
       scope module: :servers do
@@ -28,6 +30,7 @@ Rails.application.routes.draw do
       scope module: :worlds do
         get  "map" => "map#index"
         get  "trade-ledger" => "trade_ledger#index"
+        get  "archive" => "archive#show"
         resources :regions, only: %i[show] do
           get :adjacent, on: :member
         end

@@ -39,6 +39,17 @@ module ScheduledEvents
     def call
       return @event unless @event.pending?
 
+      if world_frozen?
+        @event.update!(processed_at: Time.current)
+        ActiveSupport::Notifications.instrument(
+          "dun.scheduled_event.skipped_world_archived",
+          event_id: @event.id,
+          world_id: @event.world_id,
+          kind: @event.kind
+        )
+        return @event
+      end
+
       handler = HANDLERS[@event.kind]
       raise UnknownKind, "no handler registered for kind #{@event.kind.inspect}" if handler.nil?
 
@@ -53,6 +64,13 @@ module ScheduledEvents
       end
 
       @event
+    end
+
+    private
+
+    def world_frozen?
+      world = @event.world
+      world.archived? || world.cancelled?
     end
   end
 end

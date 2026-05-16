@@ -28,9 +28,10 @@ The docs go from **outside-in**: each file zooms one level deeper.
 9. **Nodes & Ruins** ([08-nodes-and-ruins.md](08-nodes-and-ruins.md)) — Phase 7: wilderness garrison combat, node capture, ruin claim, home hoards.
 10. **Trade & Caravans** ([09-trade-and-caravans.md](09-trade-and-caravans.md)) — Phase 8: caravan dispatch, escort combat, third-party interception, public trade ledger.
 11. **Wonders** ([10-wonders.md](10-wonders.md)) — Phase 9: foundation/construction/consecration lifecycle, milestone payments, Trebuchet damage, lazy HP accrual, round-end hook.
-12. **API endpoint reference** ([api-endpoints.md](api-endpoints.md)) — every endpoint, cross-linked back to the phase that introduced it.
+12. **Round end & archive** ([11-round-end-and-archive.md](11-round-end-and-archive.md)) — Phase 10: round freeze, JSONB archive snapshot, persistent player stats, titles, four-kind leaderboards, account deletion.
+13. **API endpoint reference** ([api-endpoints.md](api-endpoints.md)) — every endpoint, cross-linked back to the phase that introduced it.
 
-Phases 10–14 are not yet shipped; their slots in this doc set will fill in as the work lands.
+Phases 11–14 are not yet shipped; their slots in this doc set will fill in as the work lands.
 
 ---
 
@@ -79,6 +80,7 @@ The backend grows outward in five concentric rings. Each ring depends only on th
 | **Economy, military & combat** (Phases 3, 5, 6) | Building, BuildOrder, Army, TrainingOrder, MarchOrder, Battle, BattleParticipant | kingdom-lifetime (round) |
 | **Trade** (Phase 8) | Caravan, TradeLedgerEntry | per-caravan (record), permanent for round (ledger) |
 | **Wonder** (Phase 9) | Wonder, WonderDamageEvent | per-Wonder (live during build/consecration, frozen at round end) |
+| **Persistence** (Phase 10) | RoundArchive, PlayerProfileStats, PlayerTitle, LeaderboardSnapshot, RetiredHandle | server-lifetime (survives round resets) |
 | **Time** (Phase 4) | ScheduledEvent, recurring jobs, internal event bus | continuous |
 
 The **Time** layer is structurally separate: it sits next to the World ring rather than inside it, because it's what gives the World state ring its evolution over time. Every dated promise (a build finishing, a march arriving) is a row in `scheduled_events`, drained every 5 seconds by the discrete-event tick job. See [05-tick-engine.md](05-tick-engine.md).
@@ -87,7 +89,7 @@ The **Time** layer is structurally separate: it sits next to the World ring rath
 
 ## What is _not_ here
 
-- **Round end, anti-abuse, weather, fog of war** — Phases 10–13, none started.
+- **Anti-abuse, weather, fog of war** — Phases 11–13, none started.
 - **Deployment** — Phase 14, not started. Currently `bin/dev` runs the web server and Solid Queue worker via foreman; production deployment is not yet defined.
 
 When a phase ships, add a new section file (`07-…`, `08-…`) and link it from this README and from [api-endpoints.md](api-endpoints.md).

@@ -80,6 +80,12 @@ tags:
     description: Caravan dispatch and per-world public trade ledger (§12, §17.2).
   - name: Player wonders
     description: Wonder lifecycle (foundation, construction, consecration), repair, and milestones (§14, §16.2).
+  - name: Hall of Fame
+    description: Per-server leaderboard snapshots — Champions, Wreckers, Warlords, Veterans (§17.4).
+  - name: World archive
+    description: Frozen end-of-round state for archived worlds (§16.6).
+  - name: Account
+    description: Player-initiated irreversible account deletion (§17.4).
 
 security: []   # endpoints declare their own security requirements
 
@@ -1912,6 +1918,85 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
+  /auth/account:
+    delete:
+      operationId: deleteAccount
+      tags: [Account]
+      summary: Irreversibly delete the caller's account
+      description: |
+        §17.4 account deletion. Effects:
+        - Real name purged immediately.
+        - Per-server handle anonymized to `[deleted player #<id>]`; original
+          handle is reserved for 30 days before becoming available again.
+        - Stats counters zeroed across all servers.
+        - Champion titles removed from leaderboard snapshots.
+        - All player ApiKeys revoked (the calling key returns 401 on next use).
+        - Player row tombstoned (email replaced, name `[deleted]`); the row
+          stays so archive references remain intact.
+        Irreversible. Battle reports and trade ledger keep their
+        handle-at-time-of-event snapshots.
+      security: [{ playerBearer: [] }]
+      responses:
+        "204": { description: Account deleted. The calling key is now invalid. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /servers/{id}/hall-of-fame:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: getHallOfFame
+      tags: [Hall of Fame]
+      summary: Per-server leaderboard snapshots
+      description: |
+        Returns the four leaderboard snapshots (Champions, Wreckers, Warlords,
+        Veterans), recomputed only at round end (§17.4). Caller must be a
+        member of the server.
+      security: [{ playerBearer: [] }]
+      parameters:
+        - in: query
+          name: kind
+          required: false
+          schema: { type: string, enum: [champions, wreckers, warlords, veterans] }
+          description: Restrict the response to a single leaderboard kind.
+      responses:
+        "200":
+          description: Hall of fame snapshots.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HallOfFame" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: Invalid `kind` value.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /worlds/{world_id}/archive:
+    parameters:
+      - in: path
+        name: world_id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getWorldArchive
+      tags: [World archive]
+      summary: Frozen end-of-round state for an archived world
+      description: |
+        Returns the immutable per-world archive snapshot built at round end
+        (§16.6): final regions, kingdoms, Wonder state, and aggregate counts.
+        404 while the world is still live or has no archive row. Caller must
+        be a member of the world's hosting server.
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Archive snapshot.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoundArchive" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /worlds/{world_id}/wonders:
     parameters:
       - in: path
@@ -2128,25 +2213,49 @@ components:
     PlayerProfileWrite:
       type: object
       description: Returned by `PATCH /servers/{id}/me`.
-      required: [handle, real_name, stats]
+      required: [handle, real_name, stats, title]
       properties:
         handle:    { type: [string, "null"] }
         real_name: { type: [string, "null"] }
-        stats:
-          type: object
-          additionalProperties: true
+        stats:     { $ref: "#/components/schemas/PlayerStats" }
+        title:     { type: [string, "null"], description: "Rendered inline title per §17.4, e.g. `[Champion of Aldermarch ×2]`." }
 
     PlayerProfileRead:
       type: object
       description: Returned by `GET /servers/{serverId}/players/{handle}`.
-      required: [handle, real_name, stats, joined_at]
+      required: [handle, real_name, stats, title, joined_at]
       properties:
         handle:    { type: string }
         real_name: { type: [string, "null"] }
-        stats:
-          type: object
-          additionalProperties: true
+        stats:     { $ref: "#/components/schemas/PlayerStats" }
+        title:     { type: [string, "null"] }
         joined_at: { type: string, format: date-time }
+
+    PlayerStats:
+      type: object
+      description: Persistent per-player counters (§17.4).
+      required:
+        - rounds_played
+        - rounds_won
+        - wonders_completed
+        - wonders_destroyed
+        - peak_nodes
+        - raids_launched
+        - raids_defended
+        - raids_won_offense
+        - raids_won_defense
+        - resources_looted
+      properties:
+        rounds_played:     { type: integer, minimum: 0 }
+        rounds_won:        { type: integer, minimum: 0 }
+        wonders_completed: { type: integer, minimum: 0 }
+        wonders_destroyed: { type: integer, minimum: 0 }
+        peak_nodes:        { type: integer, minimum: 0 }
+        raids_launched:    { type: integer, minimum: 0 }
+        raids_defended:    { type: integer, minimum: 0 }
+        raids_won_offense: { type: integer, minimum: 0 }
+        raids_won_defense: { type: integer, minimum: 0 }
+        resources_looted:  { type: integer, minimum: 0 }
 
     # ─── Phase 2: worlds, regions, nodes, ruins, kingdoms ─────────────────────
 
@@ -2484,6 +2593,8 @@ components:
         region_id: { type: string }
         attacker_kingdom_id: { type: string }
         defender_kingdom_id: { type: string }
+        attacker_title: { type: [string, "null"], description: "Rendered title for the attacker (§17.4)." }
+        defender_title: { type: [string, "null"], description: "Rendered title for the defender (§17.4)." }
         march_order_id: { type: [string, "null"] }
         outcome:
           type: string
@@ -2666,3 +2777,106 @@ components:
         percent:
           type: integer
           enum: [25, 50, 75]
+
+    # ─── Phase 10: round end, archive, leaderboards ─────────────────────────
+
+    RoundArchive:
+      type: object
+      description: |
+        Frozen end-of-round snapshot of an archived world (§16.6). Read-only;
+        served by `GET /worlds/{world_id}/archive`. `frozen_state` is opaque
+        from the API's perspective; the schema below documents the keys the
+        backend currently writes.
+      required: [world_id, ended_at, frozen_state]
+      properties:
+        world_id:          { type: string }
+        winner_kingdom_id: { type: [string, "null"] }
+        wonder_name:       { type: [string, "null"] }
+        ended_at:          { type: string, format: date-time }
+        frozen_state:      { $ref: "#/components/schemas/FrozenState" }
+
+    FrozenState:
+      type: object
+      description: Per-world end-of-round snapshot payload.
+      required: [ended_at, regions, kingdoms, battles_count, caravans_count, nodes_count]
+      properties:
+        ended_at: { type: string, format: date-time }
+        regions:
+          type: array
+          items:
+            type: object
+            required: [id, name, terrain, position, is_hub, node_ids]
+            properties:
+              id:       { type: string }
+              name:     { type: string }
+              terrain:  { type: string }
+              position: { $ref: "#/components/schemas/Position" }
+              is_hub:   { type: boolean }
+              node_ids: { type: array, items: { type: string } }
+        kingdoms:
+          type: array
+          items:
+            type: object
+            required: [id, handle, home_region_id, final_stockpiles, building_levels, peak_nodes, final_node_count, joined_at]
+            properties:
+              id:               { type: string }
+              handle:           { type: [string, "null"] }
+              real_name:        { type: [string, "null"] }
+              home_region_id:   { type: [string, "null"] }
+              final_stockpiles: { $ref: "#/components/schemas/StockpileMap" }
+              building_levels:
+                type: object
+                additionalProperties: { type: integer, minimum: 0 }
+              peak_nodes:       { type: integer, minimum: 0 }
+              final_node_count: { type: integer, minimum: 0 }
+              joined_at:        { type: [string, "null"], format: date-time }
+              eliminated_at:    { type: [string, "null"], format: date-time }
+        wonder:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [kingdom_id, name, status, hp, target_hp]
+              properties:
+                kingdom_id:           { type: string }
+                name:                 { type: string }
+                status:               { type: string, enum: [foundation, construction, consecration, completed, destroyed] }
+                hp:                   { type: integer, minimum: 0 }
+                target_hp:            { type: integer, minimum: 1 }
+                damage_events_count:  { type: integer, minimum: 0 }
+                started_at:           { type: [string, "null"], format: date-time }
+                completed_at:         { type: [string, "null"], format: date-time }
+                destroyed_at:         { type: [string, "null"], format: date-time }
+        battles_count:  { type: integer, minimum: 0 }
+        caravans_count: { type: integer, minimum: 0 }
+        nodes_count:    { type: integer, minimum: 0 }
+
+    HallOfFame:
+      type: object
+      description: Per-server leaderboard envelope returned by `GET /servers/{id}/hall-of-fame`.
+      required: [server_id, leaderboards]
+      properties:
+        server_id: { type: string }
+        leaderboards:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/Leaderboard" }
+          description: Keyed by leaderboard kind (`champions`, `wreckers`, `warlords`, `veterans`).
+
+    Leaderboard:
+      type: object
+      required: [snapshot_at, entries]
+      properties:
+        snapshot_at: { type: [string, "null"], format: date-time }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/LeaderboardEntry" }
+
+    LeaderboardEntry:
+      type: object
+      required: [player_profile_id, handle, score, secondary]
+      properties:
+        player_profile_id: { type: [string, "null"] }
+        handle:            { type: [string, "null"] }
+        score:             { type: integer, minimum: 0 }
+        secondary:         { type: integer, minimum: 0 }
+        title:             { type: [string, "null"] }
+

@@ -35,6 +35,7 @@ See [02-identity-and-servers.md](02-identity-and-servers.md).
 | POST | `/v1/auth/exchange` | `MagicLinks::Consume` | redeems token → ApiKey; admits to matching servers |
 | GET | `/v1/auth/keys` | — | list this player's active API keys |
 | DELETE | `/v1/auth/keys/:id` | `ApiKeys::Revoke` | revoke a key |
+| DELETE | `/v1/auth/account` | `Accounts::Delete` | irreversible — anonymize handles, retire for 30 days, scrub leaderboards (Phase 10) |
 
 ### Player server surface
 
@@ -42,8 +43,9 @@ See [02-identity-and-servers.md](02-identity-and-servers.md).
 |---|---|---|---|
 | GET | `/v1/servers` | — | servers admitting this player |
 | POST | `/v1/servers/:id/join` | — | explicit join for invite-only servers |
-| PATCH | `/v1/servers/:id/me` | `Players::SetHandle`, `Players::SetRealName` | set per-server handle / real name; handle locked during active round |
-| GET | `/v1/servers/:server_id/players/:handle` | — | view another player's profile on this server |
+| PATCH | `/v1/servers/:id/me` | `Players::SetHandle`, `Players::SetRealName` | set per-server handle / real name; handle locked during active round; retired handles unavailable for 30 days |
+| GET | `/v1/servers/:server_id/players/:handle` | — | view another player's profile on this server; serializer includes inline `title` (Phase 10) |
+| GET | `/v1/servers/:id/hall-of-fame` | — | four leaderboard snapshots (Champions/Wreckers/Warlords/Veterans); `?kind=` filter (Phase 10) |
 
 ### Admin auth (mirror of player auth)
 
@@ -99,6 +101,7 @@ See [03-worlds-and-maps.md](03-worlds-and-maps.md).
 | GET | `/v1/worlds/:id/regions/:region_id` | — | one region's detail |
 | GET | `/v1/worlds/:id/regions/:region_id/adjacent` | — | adjacent region IDs |
 | GET | `/v1/worlds/:id/ruins` | — | all ruins (claimed and unclaimed) |
+| GET | `/v1/worlds/:id/archive` | — | frozen end-of-round snapshot — 404 while live (Phase 10) |
 
 ---
 
@@ -229,6 +232,19 @@ See [10-wonders.md](10-wonders.md).
 
 ---
 
+## Phase 10 — Round end, archive, leaderboards, account deletion
+
+See [11-round-end-and-archive.md](11-round-end-and-archive.md). The three new endpoints are already listed in their natural sections above (auth, server surface, player world surface). Trigger paths driven by `Wonders::Complete` / `Wonders::Destroy` / `Combat::ApplyOutcome` (no new endpoints):
+
+| Trigger | Service chain | Notes |
+|---|---|---|
+| Wonder completes (Consecration survives) | `Wonders::Complete` → `Rounds::End` → archive snapshot + stats + title + leaderboards | round freeze |
+| Wonder destroyed by damage | `Wonders::Destroy` → `Wreckers::Attribute` | credits killing-blow player with `wonders_destroyed` |
+| Player-vs-player battle resolved | `Combat::ApplyOutcome` → `Profiles::Increment` | raid stats (launched/defended/won, resources_looted) |
+| Node ownership changes | `Nodes::Capture`/`Nodes::Attack` → `Kingdoms::BumpPeakNodes` | per-round peak rolls up at `Rounds::End` |
+
+---
+
 ## Health
 
 | Method | Path | Notes |
@@ -242,7 +258,6 @@ See [10-wonders.md](10-wonders.md).
 
 | Phase | Endpoints (planned) | Status |
 |---|---|---|
-| Phase 10 | `/v1/servers/:id/hall-of-fame`, `/v1/worlds/:id/archive`, `DELETE /v1/auth/account` | not shipped |
 | Phase 11 | `/v1/servers/:id/reports`, `/v1/admin/servers/:id/reports`, `/v1/admin/servers/:id/audit`, `/v1/admin/servers/:id/rate_limits` | not shipped |
 | Phase 12 | `/v1/worlds/:id/weather` | not shipped |
 | Phase 13 | `/v1/kingdoms/:id/scout`, `/v1/kingdoms/:id/scout-reports` | not shipped |

@@ -30,6 +30,7 @@ module Nodes
 
       if ATTACKER_WIN.include?(battle.outcome)
         @node.update!(owner_kingdom_id: army.kingdom_id, garrison: {})
+        Kingdoms::BumpPeakNodes.call(kingdom_id: army.kingdom_id)
         ActiveSupport::Notifications.instrument(
           "dun.node.captured",
           world_id: battle.world_id,

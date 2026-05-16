@@ -391,30 +391,48 @@ Implements `§14` and `§16.2`. Round-end critical path.
 Implements `§16.6` (round freeze, archive) and `§17.4` (stats, leaderboards, titles, deletion).
 
 ### Models
-- [ ] `RoundArchive` (world_id, frozen_state jsonb or per-table snapshots, winner, wonder_name, ended_at)
-- [ ] `PlayerProfileStats` (already on `PlayerProfile` jsonb or split out): `rounds_played`, `rounds_won`, `wonders_completed`, `wonders_destroyed`, `peak_nodes`, `raids_launched`, `raids_defended`, `raids_won_offense`, `raids_won_defense`, `resources_looted`
-- [ ] `PlayerTitle` (player_profile_id, world_id, title, awarded_at, count)
-- [ ] `LeaderboardSnapshot` (server_id, kind: champions|wreckers|warlords|veterans, snapshot_at, entries jsonb)
+- [x] `RoundArchive` (world_id [unique], frozen_state jsonb, winner_kingdom_id, wonder_name, ended_at)
+- [x] `PlayerProfileStats` (separate 1:1 table per design decision): `rounds_played`, `rounds_won`, `wonders_completed`, `wonders_destroyed`, `peak_nodes`, `raids_launched`, `raids_defended`, `raids_won_offense`, `raids_won_defense`, `resources_looted`
+- [x] `PlayerTitle` (player_profile_id, world_id, kind, awarded_at) — `count` collapsed at render time via `Titles::Render`
+- [x] `LeaderboardSnapshot` (server_id, kind: champions|wreckers|warlords|veterans, snapshot_at, entries jsonb)
+- [x] `RetiredHandle` (server_id, handle_lower, freed_at) — 30-day reservation for deleted accounts
+- [x] `Player.deleted_at`, `Kingdom.peak_nodes` columns
 
 ### Services
-- [ ] `Rounds::End.call(world, winning_kingdom)` — instant freeze (halt marches, freeze queues), set world status to archived, fire announcement
-- [ ] `Profiles::Increment.call(player, deltas)` — atomic stat updates at resolution moments
-- [ ] `Wreckers::Attribute.call(wonder_destroyed_event)` — killing-blow attribution per `§17.4`, ties broken by largest Trebuchet contribution then earliest dispatch
-- [ ] `Titles::Award.call(player, world_name)` — `[Champion of <World> ×N]`
-- [ ] `Leaderboards::Recompute.call(server)` — runs only on round end, snapshots cached
-- [ ] `Accounts::Delete.call(user)` — per `§17.4`: anonymize handle → `[deleted player]` across all archives, purge real name immediately, free handle after 30 days, irreversible
+- [x] `Rounds::End.call(world:, winning_kingdom:, wonder_name:)` — archives world, snapshots state, increments stats, awards title, recomputes leaderboards, idempotent
+- [x] `Rounds::SnapshotState.call(world)` — pure projection: regions, kingdoms, wonder, aggregate counts → JSONB
+- [x] `Profiles::Increment.call(player_profile:, deltas:)` — allowlisted atomic SQL increments
+- [x] `Profiles::MaxPeakNodes.call(player_profile:, candidate:)` — GREATEST fold-in at round end
+- [x] `Kingdoms::BumpPeakNodes.call(kingdom_id:)` — bumps per-round peak on every node ownership change
+- [x] `Wreckers::Attribute.call(wonder:)` — killing-blow attribution; ties by largest Trebuchet count then earliest dispatch
+- [x] `Titles::Award.call(player_profile:, world:)` / `Titles::Render.call(profile)` — `[Champion of <World> ×N]`
+- [x] `Leaderboards::Recompute.call(server:)` — runs only on round end, snapshot row per kind replaced atomically
+- [x] `Accounts::Delete.call(player:)` — per `§17.4`: anonymize handles, retire for 30 days, purge real names, zero stats, delete titles, scrub leaderboards, revoke ApiKeys, tombstone Player row
+- [x] `ScheduledEvents::Dispatch` archived/cancelled-world guard — short-circuits ripe events on frozen worlds
+
+### Integration hooks (in-place modifications)
+- [x] `Wonders::Complete` delegates to `Rounds::End` (replaces Phase 9 stub `world.update!(status: "archived"...)`)
+- [x] `Wonders::Destroy` calls `Wreckers::Attribute` when `reason: "damage"` (skipped on voluntary cancel)
+- [x] `Combat::ApplyOutcome` increments raid stats for both player-vs-player kingdoms after every battle
+- [x] `Nodes::Capture`/`Nodes::Attack` call `Kingdoms::BumpPeakNodes` after ownership transfer
+- [x] `Players::SetHandle` rejects handles in the 30-day `RetiredHandle` reservation window
 
 ### API endpoints
-- [ ] `GET  /v1/servers/:id/hall-of-fame` (and `:leaderboard` / `--all` variants)
-- [ ] `GET  /v1/worlds/:id/archive`
-- [ ] `DELETE /v1/auth/account`
+- [x] `GET    /v1/servers/:id/hall-of-fame` (`?kind=` filter)
+- [x] `GET    /v1/worlds/:id/archive`
+- [x] `DELETE /v1/auth/account`
+- [x] Inline `title` rendered on `players#show`, `servers/me#update`, battle reports, hall-of-fame entries
 
 ### Tests
-- [ ] Round-end freeze halts in-flight marches, build queues
-- [ ] Killing-blow attribution and tiebreakers
-- [ ] Title count suffix display for repeat wins on same world
-- [ ] Per-server scoping — same email on two servers ⇒ independent profiles
-- [ ] Account deletion: real_name purged immediately, handle anonymized in archives, 30-day reservation
+- [x] Round-end freeze: `ScheduledEvents::Dispatch` skip-and-stamp guard for archived worlds (`test/services/scheduled_events/dispatch_archived_world_test.rb`)
+- [x] Killing-blow attribution and tiebreakers (Trebuchet count then earliest dispatch)
+- [x] Title count suffix display for repeat wins on same world; cross-world picks most recent
+- [x] Per-server scoping — same player on two servers ⇒ independent stats rows
+- [x] Account deletion: real_name purged immediately, handle anonymized + retired 30 days, stats zeroed, titles deleted, ApiKeys revoked, leaderboard snapshots scrubbed
+- [x] Leaderboard sorting + top-10 cap + snapshot replacement across all four kinds
+- [x] `Profiles::Increment` allowlist enforcement; `BumpPeakNodes` never decreases
+- [x] `Rounds::SnapshotState` payload shape (regions, kingdoms, optional wonder, counts)
+- [x] Controller smoke tests for hall-of-fame, archive, and `DELETE /v1/auth/account`
 
 ---
 

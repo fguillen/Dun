@@ -16,6 +16,8 @@ module Api
         region_id: battle.region_id,
         attacker_kingdom_id: battle.attacker_kingdom_id,
         defender_kingdom_id: battle.defender_kingdom_id,
+        attacker_title: title_for(battle.attacker_kingdom),
+        defender_title: title_for(battle.defender_kingdom),
         march_order_id: battle.march_order_id,
         outcome: battle.outcome,
         loot: battle.loot,
@@ -23,6 +25,13 @@ module Api
         started_at: battle.started_at&.iso8601,
         ended_at: battle.ended_at&.iso8601
       }
+    end
+
+    def self.title_for(kingdom)
+      return nil if kingdom.nil?
+      profile = kingdom.player_profile
+      return nil if profile.nil?
+      ::Titles::Render.call(profile)
     end
 
     def self.serialize_participant(participant)

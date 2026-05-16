@@ -30,6 +30,8 @@ module Combat
       apply_attacker_position(attacker_participant.army)
       defender_participants.each { |dp| apply_defender_position(dp.army) }
 
+      record_raid_stats(transferred)
+
       ActiveSupport::Notifications.instrument(
         "dun.battle.applied",
         world_id: @battle.world_id,
@@ -42,6 +44,26 @@ module Combat
     end
 
     private
+
+    def record_raid_stats(transferred_loot)
+      attacker_profile = @battle.attacker_kingdom&.player_profile
+      defender_profile = @battle.defender_kingdom&.player_profile
+      return if attacker_profile.nil? || defender_profile.nil?
+
+      attacker_deltas = { raids_launched: 1 }
+      defender_deltas = { raids_defended: 1 }
+
+      if ATTACKER_WIN.include?(@battle.outcome)
+        attacker_deltas[:raids_won_offense] = 1
+        looted_sum = transferred_loot.values.map(&:to_i).sum
+        attacker_deltas[:resources_looted] = looted_sum if looted_sum.positive?
+      else
+        defender_deltas[:raids_won_defense] = 1
+      end
+
+      Profiles::Increment.call(player_profile: attacker_profile, deltas: attacker_deltas)
+      Profiles::Increment.call(player_profile: defender_profile, deltas: defender_deltas)
+    end
 
     def update_walls
       return unless @walls_building

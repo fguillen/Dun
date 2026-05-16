@@ -9,4 +9,8 @@ class Player < ApplicationRecord
 
   validates :email, presence: true, uniqueness: { case_sensitive: false }, format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :name, presence: true
+
+  def deleted?
+    deleted_at.present?
+  end
 end

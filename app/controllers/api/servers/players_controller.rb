@@ -17,7 +17,8 @@ module Api
         {
           handle: profile.handle,
           real_name: profile.real_name,
-          stats: profile.stats,
+          stats: profile.stats&.to_counters || {},
+          title: ::Titles::Render.call(profile),
           joined_at: profile.created_at.iso8601
         }
       end

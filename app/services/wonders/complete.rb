@@ -1,7 +1,7 @@
 module Wonders
   # Scheduled-event handler at consecration_at + 24h. Marks the Wonder
-  # completed and archives the world (minimal Phase 9 hook — Phase 10's
-  # Rounds::End will replace this with the full freeze/snapshot flow).
+  # completed and hands off to `Rounds::End` for the full round-end flow
+  # (archive snapshot, stats, titles, leaderboards).
   class Complete
     def self.call(wonder:)
       new(wonder: wonder).call
@@ -22,27 +22,19 @@ module Wonders
         now = Time.current
         wonder.update!(status: "completed", completed_at: now)
 
-        world = wonder.kingdom.world
-        world.update!(
-          status: "archived",
-          archived_at: now,
-          winner_kingdom_id: wonder.kingdom_id,
-          wonder_name: wonder.name
-        )
-
         ActiveSupport::Notifications.instrument(
           "dun.wonder.completed",
-          world_id: world.id,
+          world_id: wonder.kingdom.world_id,
           wonder_id: wonder.id,
           kingdom_id: wonder.kingdom_id,
           name: wonder.name
         )
 
-        ActiveSupport::Notifications.instrument(
-          "dun.world.archived",
-          world_id: world.id,
-          winner_kingdom_id: wonder.kingdom_id,
-          wonder_name: wonder.name
+        Rounds::End.call(
+          world: wonder.kingdom.world,
+          winning_kingdom: wonder.kingdom,
+          wonder_name: wonder.name,
+          at: now
         )
 
         wonder
