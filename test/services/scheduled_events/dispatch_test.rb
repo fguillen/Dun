@@ -129,6 +129,54 @@ module ScheduledEvents
       assert event.reload.pending?
     end
 
+    test "wonder_phase enter_consecration handler transitions Wonder" do
+      world = create(:world, :active)
+      kingdom = create(:kingdom, :with_buildings, world: world, home_region: create(:region, world: world))
+      kingdom.buildings.find_by(kind: "warehouse").update!(level: 17)
+      kingdom.update!(stockpiles: { "gold" => 50_000, "wood" => 50_000, "stone" => 150_000, "iron" => 50_000, "checkpoint_at" => Time.current.iso8601 })
+      wonder = create(:wonder, kingdom: kingdom, status: "construction", hp: 10_000,
+        milestones_paid: { "25" => true, "50" => true, "75" => true })
+      event = create(:scheduled_event,
+        world: world,
+        kind: "wonder_phase",
+        fire_at: 1.minute.ago,
+        payload: { "wonder_id" => wonder.id, "transition" => "enter_consecration" })
+
+      Dispatch.call(event)
+
+      assert event.reload.processed_at.present?
+      assert_equal "consecration", wonder.reload.status
+    end
+
+    test "wonder_phase complete handler archives the world" do
+      world = create(:world, :active)
+      kingdom = create(:kingdom, :with_buildings, world: world, home_region: create(:region, world: world))
+      wonder = create(:wonder, :consecration, kingdom: kingdom)
+      event = create(:scheduled_event,
+        world: world,
+        kind: "wonder_phase",
+        fire_at: 1.minute.ago,
+        payload: { "wonder_id" => wonder.id, "transition" => "complete" })
+
+      Dispatch.call(event)
+
+      assert event.reload.processed_at.present?
+      assert_equal "completed", wonder.reload.status
+      assert_equal "archived", world.reload.status
+    end
+
+    test "wonder_phase is a no-op when the Wonder has been deleted" do
+      world = create(:world, :active)
+      event = create(:scheduled_event,
+        world: world,
+        kind: "wonder_phase",
+        fire_at: 1.minute.ago,
+        payload: { "wonder_id" => "01HZZZZZZZZZZZZZZZZZZZZZZZ", "transition" => "complete" })
+
+      assert_nothing_raised { Dispatch.call(event) }
+      assert event.reload.processed_at.present?
+    end
+
     test "emits dun.scheduled_event.processed notification" do
       world = create(:world, :grace)
       event = create(:scheduled_event, world: world, kind: "grace_expiry", fire_at: 1.minute.ago)

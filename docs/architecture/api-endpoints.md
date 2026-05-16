@@ -199,6 +199,36 @@ See [09-trade-and-caravans.md](09-trade-and-caravans.md).
 
 ---
 
+## Phase 9 — Wonders
+
+See [10-wonders.md](10-wonders.md).
+
+### Mutation surface
+
+| Method | Path | Service | Notes |
+|---|---|---|---|
+| POST | `/v1/kingdoms/:kingdom_id/wonder` | `Wonders::Start` | body: `{name}` — name from §14 fixed menu |
+| POST | `/v1/kingdoms/:kingdom_id/wonder/repair` | `Wonders::Repair` | body: `{hp}` — 1 HP per 8 Stone; 2000 HP/phase cap |
+| POST | `/v1/kingdoms/:kingdom_id/wonder/milestone` | `Wonders::PayMilestone` | body: `{percent}` (25/50/75) |
+| DELETE | `/v1/kingdoms/:kingdom_id/wonder` | `Wonders::Cancel` | abandons — paid resources lost |
+
+### Read surface
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/v1/kingdoms/:kingdom_id/wonder` | the kingdom's Wonder (lazy-applies construction before serializing) |
+| GET | `/v1/worlds/:world_id/wonders` | public list of all Wonders in the world |
+
+### Trigger paths (driven by combat and scheduled events, not direct endpoints)
+
+| Trigger | Service chain | Notes |
+|---|---|---|
+| Attacker wins home battle, surviving Trebuchets | `Combat::Resolve` → `Wonders::Damage` (→ `Wonders::Destroy` if HP=0) | 50 HP per surviving Trebuchet |
+| `wonder_phase` `enter_consecration` event (+90h) | `ScheduledEvents::Dispatch` → `Wonders::EnterConsecration` | deducts 5%, schedules `complete` at +24h |
+| `wonder_phase` `complete` event (+24h consecration) | `ScheduledEvents::Dispatch` → `Wonders::Complete` | archives world, sets winner |
+
+---
+
 ## Health
 
 | Method | Path | Notes |
@@ -212,7 +242,6 @@ See [09-trade-and-caravans.md](09-trade-and-caravans.md).
 
 | Phase | Endpoints (planned) | Status |
 |---|---|---|
-| Phase 9 | `/v1/kingdoms/:id/wonder*`, `/v1/worlds/:id/wonders` | not shipped |
 | Phase 10 | `/v1/servers/:id/hall-of-fame`, `/v1/worlds/:id/archive`, `DELETE /v1/auth/account` | not shipped |
 | Phase 11 | `/v1/servers/:id/reports`, `/v1/admin/servers/:id/reports`, `/v1/admin/servers/:id/audit`, `/v1/admin/servers/:id/rate_limits` | not shipped |
 | Phase 12 | `/v1/worlds/:id/weather` | not shipped |

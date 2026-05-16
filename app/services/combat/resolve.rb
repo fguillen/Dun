@@ -124,6 +124,7 @@ module Combat
           ApplyEscortOutcome.call(battle: battle)
         else
           ApplyOutcome.call(battle: battle, state: state, walls_building: walls_building)
+          apply_wonder_damage(battle, state, defender_kingdom, region, attacker_army)
         end
 
         ActiveSupport::Notifications.instrument(
@@ -240,6 +241,26 @@ module Combat
 
     def rng_seed_string
       @rng.respond_to?(:seed) ? @rng.seed.to_s : nil
+    end
+
+    ATTACKER_WIN_OUTCOMES = %w[attacker_victory defender_rout].freeze
+
+    def apply_wonder_damage(battle, state, defender_kingdom, region, attacker_army)
+      return unless ATTACKER_WIN_OUTCOMES.include?(battle.outcome)
+      return unless region.id == defender_kingdom.home_region_id
+
+      wonder = Wonders::LiveFor.call(defender_kingdom)
+      return unless wonder
+
+      surviving_trebuchets = state.attacker_composition["trebuchet"].to_i
+      return if surviving_trebuchets <= 0
+
+      Wonders::Damage.call(
+        wonder: wonder,
+        attacker_kingdom: attacker_army.kingdom,
+        trebuchets_surviving: surviving_trebuchets,
+        battle: battle
+      )
     end
   end
 end

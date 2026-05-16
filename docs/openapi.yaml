@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: dun HTTP API
-  version: "1.0.0-phase2"
+  version: "1.0.0-phase9"
   description: |
     JSON API for the `dun` backend. The CLI gem and any future integration
     consume only this surface.
@@ -78,6 +78,8 @@ tags:
     description: Per-kingdom dashboard, building queue, and stockpile reads (§6, §10, §16.4).
   - name: Player trade
     description: Caravan dispatch and per-world public trade ledger (§12, §17.2).
+  - name: Player wonders
+    description: Wonder lifecycle (foundation, construction, consecration), repair, and milestones (§14, §16.2).
 
 security: []   # endpoints declare their own security requirements
 
@@ -1762,6 +1764,183 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /kingdoms/{kingdom_id}/wonder:
+    parameters:
+      - in: path
+        name: kingdom_id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getWonder
+      tags: [Player wonders]
+      summary: Get this kingdom's Wonder (lazily-applied current HP)
+      description: |
+        Returns the kingdom's Wonder if any. The server calls
+        `Wonders::ApplyConstruction` before serializing so the response
+        reflects current HP, including any milestone auto-pause.
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: "Wonder (or `{wonder: null}` if none exists)."
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/Wonder"
+                  - type: object
+                    properties:
+                      wonder: { nullable: true, example: null }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: startWonder
+      tags: [Player wonders]
+      summary: Begin construction of a Wonder
+      description: |
+        Validates prerequisites (§14 + §16.2 building gates, ≥3 owned nodes,
+        no live Wonder, stockpile ≥ foundation cost), deducts the 25%
+        foundation payment, locks the build queue, and schedules the
+        +90h consecration transition.
+      security: [{ playerBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WonderStartRequest" }
+      responses:
+        "201":
+          description: Wonder created in `construction` status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Wonder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            Validation rejected. Possible `error.code`: `unknown_wonder_name`,
+            `wonder_prereq_unmet`, `wonder_already_active`,
+            `insufficient_resources`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    delete:
+      operationId: cancelWonder
+      tags: [Player wonders]
+      summary: Abandon a live Wonder (paid resources lost)
+      description: |
+        Marks the Wonder `destroyed` (full loss). Unlocks the build queue.
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Wonder is now destroyed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Wonder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /kingdoms/{kingdom_id}/wonder/repair:
+    parameters:
+      - in: path
+        name: kingdom_id
+        required: true
+        schema: { type: string }
+    post:
+      operationId: repairWonder
+      tags: [Player wonders]
+      summary: Repair the Wonder (1 HP per 8 Stone)
+      description: |
+        Phase cap: 2000 HP per phase (foundation/construction/consecration
+        independent). Pauses construction 30 min per 500 HP repaired
+        (stacks if already paused).
+      security: [{ playerBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WonderRepairRequest" }
+      responses:
+        "200":
+          description: Updated Wonder.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Wonder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            Validation rejected. Possible `error.code`: `wonder_not_repairable`,
+            `invalid_amount`, `repair_cap_reached`, `insufficient_resources`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /kingdoms/{kingdom_id}/wonder/milestone:
+    parameters:
+      - in: path
+        name: kingdom_id
+        required: true
+        schema: { type: string }
+    post:
+      operationId: payWonderMilestone
+      tags: [Player wonders]
+      summary: Pay a milestone (25/50/75%) to resume construction
+      description: |
+        Construction auto-pauses when HP crosses a milestone threshold
+        (2500/5000/7500). The player must call this to deduct the 10%
+        milestone payment and resume accrual.
+      security: [{ playerBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WonderMilestoneRequest" }
+      responses:
+        "200":
+          description: Updated Wonder.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Wonder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            Validation rejected. Possible `error.code`: `no_milestone_pending`,
+            `wrong_milestone_percent`, `milestone_already_paid`,
+            `insufficient_resources`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /worlds/{world_id}/wonders:
+    parameters:
+      - in: path
+        name: world_id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listWorldWonders
+      tags: [Player wonders]
+      summary: Public list of Wonders in the world
+      description: |
+        World-scoped, ordered by creation time. Visible to any member of
+        the world's server.
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Wonder list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [wonders]
+                properties:
+                  wonders:
+                    type: array
+                    items: { $ref: "#/components/schemas/WonderListItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 # ═══════════════════════════════════════════════════════════════════════════════
 
 components:
@@ -2393,3 +2572,97 @@ components:
           type: string
           enum: [in_transit, delivered, intercepted]
         recorded_at: { type: string, format: date-time }
+
+    # ─── Phase 9: Wonders ────────────────────────────────────────────────────
+
+    Wonder:
+      type: object
+      required: [id, kingdom_id, world_id, name, status, hp, target_hp, milestones_paid, repaired_hp_by_phase]
+      properties:
+        id: { type: string }
+        kingdom_id: { type: string }
+        world_id:   { type: string }
+        name:
+          type: string
+          enum: [sky_tower, eternal_citadel, cathedral_of_ages, library_of_worlds, crown_of_kings, black_spire]
+          description: Wonder name from the §14 fixed menu.
+        status:
+          type: string
+          enum: [foundation, construction, consecration, completed, destroyed]
+        hp:        { type: integer, minimum: 0, description: "Current HP." }
+        target_hp: { type: integer, minimum: 1, description: "Max HP for the current phase (10,000 once construction begins)." }
+        milestones_paid:
+          type: object
+          description: Tracks whether each milestone (25/50/75%) has been paid.
+          properties:
+            "25": { type: boolean }
+            "50": { type: boolean }
+            "75": { type: boolean }
+        pending_milestone_percent:
+          type: [integer, "null"]
+          enum: [25, 50, 75, null]
+          description: |
+            Non-null when construction is paused at a milestone threshold awaiting
+            payment. Player must POST /wonder/milestone {percent} to resume.
+        pending_milestone_cost:
+          type: [object, "null"]
+          description: Per-resource cost of the pending milestone payment (null if none pending).
+          additionalProperties: { type: integer, minimum: 0 }
+        repaired_hp_by_phase:
+          type: object
+          description: HP already repaired in each phase (cap is 2000 HP per phase, independent).
+          properties:
+            foundation:   { type: integer, minimum: 0 }
+            construction: { type: integer, minimum: 0 }
+            consecration: { type: integer, minimum: 0 }
+        paused_until:           { type: [string, "null"], format: date-time, description: "Set by repairs — construction resumes after this timestamp." }
+        started_at:             { type: string, format: date-time }
+        construction_started_at: { type: [string, "null"], format: date-time }
+        consecration_at:        { type: [string, "null"], format: date-time }
+        completed_at:           { type: [string, "null"], format: date-time }
+        destroyed_at:           { type: [string, "null"], format: date-time }
+
+    WonderListItem:
+      type: object
+      required: [id, kingdom_id, builder_handle, name, status, hp, target_hp, hp_pct, started_at]
+      description: Compact public view of a Wonder for the world-list endpoint.
+      properties:
+        id: { type: string }
+        kingdom_id: { type: string }
+        builder_handle: { type: string }
+        name: { type: string }
+        status:
+          type: string
+          enum: [foundation, construction, consecration, completed, destroyed]
+        hp:     { type: integer, minimum: 0 }
+        target_hp: { type: integer, minimum: 1 }
+        hp_pct: { type: integer, minimum: 0, maximum: 100 }
+        started_at:      { type: string, format: date-time }
+        consecration_at: { type: [string, "null"], format: date-time }
+        completed_at:    { type: [string, "null"], format: date-time }
+        destroyed_at:    { type: [string, "null"], format: date-time }
+
+    WonderStartRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          enum: [sky_tower, eternal_citadel, cathedral_of_ages, library_of_worlds, crown_of_kings, black_spire]
+
+    WonderRepairRequest:
+      type: object
+      required: [hp]
+      properties:
+        hp:
+          type: integer
+          minimum: 1
+          description: HP to repair. Effective amount may be clamped by the 2000 HP/phase cap or remaining HP-to-target.
+
+    WonderMilestoneRequest:
+      type: object
+      required: [percent]
+      properties:
+        percent:
+          type: integer
+          enum: [25, 50, 75]

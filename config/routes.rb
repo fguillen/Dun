@@ -33,6 +33,7 @@ Rails.application.routes.draw do
         end
         resources :ruins, only: %i[index]
         resources :nodes, only: %i[index show]
+        resources :wonders, only: %i[index]
       end
     end
 
@@ -44,6 +45,10 @@ Rails.application.routes.draw do
         resources :armies,          only: %i[index]
         resources :battles,         only: %i[index]
         resources :caravans,        only: %i[create]
+        resource :wonder, only: %i[show create destroy] do
+          post :repair
+          post :milestone
+        end
       end
     end
 

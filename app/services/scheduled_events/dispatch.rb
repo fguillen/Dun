@@ -17,6 +17,14 @@ module ScheduledEvents
       "march_arrival" => ->(event) {
         march_order = MarchOrder.find_by(id: event.payload["march_order_id"])
         Marches::Arrive.call(march_order: march_order) if march_order
+      },
+      "wonder_phase" => ->(event) {
+        wonder = Wonder.find_by(id: event.payload["wonder_id"])
+        next unless wonder
+        case event.payload["transition"]
+        when "enter_consecration" then Wonders::EnterConsecration.call(wonder: wonder)
+        when "complete"           then Wonders::Complete.call(wonder: wonder)
+        end
       }
     }.freeze
 

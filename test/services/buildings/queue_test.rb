@@ -132,5 +132,20 @@ module Buildings
         Queue.call(kingdom: @kingdom, kind: "quarry", target_level: 2)
       end
     end
+
+    test "rejects when a live Wonder is in progress" do
+      create(:wonder, kingdom: @kingdom, status: "construction")
+      assert_raises(Queue::WonderInProgress) do
+        Queue.call(kingdom: @kingdom, kind: "quarry", target_level: 2)
+      end
+    end
+
+    test "allows builds after the Wonder is destroyed" do
+      wonder = create(:wonder, kingdom: @kingdom, status: "construction")
+      wonder.update!(status: "destroyed", destroyed_at: 1.minute.ago)
+      assert_nothing_raised do
+        Queue.call(kingdom: @kingdom, kind: "quarry", target_level: 2)
+      end
+    end
   end
 end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_16_200001) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_210001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -377,6 +377,45 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_200001) do
     t.index ["kingdom_id"], name: "index_training_orders_on_kingdom_id_unresolved", where: "((completed_at IS NULL) AND (cancelled_at IS NULL))"
   end
 
+  create_table "wonder_damage_events", id: :string, force: :cascade do |t|
+    t.string "attacker_kingdom_id", null: false
+    t.string "battle_id"
+    t.datetime "created_at", null: false
+    t.integer "hp_after", null: false
+    t.integer "hp_before", null: false
+    t.datetime "occurred_at", null: false
+    t.integer "trebuchets_surviving", null: false
+    t.datetime "updated_at", null: false
+    t.string "wonder_id", null: false
+    t.index ["attacker_kingdom_id"], name: "index_wonder_damage_events_on_attacker_kingdom_id"
+    t.index ["battle_id"], name: "index_wonder_damage_events_on_battle_id"
+    t.index ["wonder_id", "occurred_at"], name: "index_wonder_damage_events_on_wonder_id_and_occurred_at"
+    t.index ["wonder_id"], name: "index_wonder_damage_events_on_wonder_id"
+  end
+
+  create_table "wonders", id: :string, force: :cascade do |t|
+    t.datetime "completed_at"
+    t.datetime "consecration_at"
+    t.datetime "construction_started_at"
+    t.datetime "created_at", null: false
+    t.datetime "destroyed_at"
+    t.integer "hp", default: 0, null: false
+    t.string "kingdom_id", null: false
+    t.datetime "last_construction_at"
+    t.jsonb "milestones_paid", default: {"25" => false, "50" => false, "75" => false}, null: false
+    t.string "name", null: false
+    t.datetime "paused_until"
+    t.integer "pending_milestone_percent"
+    t.jsonb "repaired_hp_by_phase", default: {"foundation" => 0, "consecration" => 0, "construction" => 0}, null: false
+    t.datetime "started_at", null: false
+    t.string "status", null: false
+    t.integer "target_hp", default: 10000, null: false
+    t.datetime "updated_at", null: false
+    t.index ["kingdom_id", "status"], name: "index_wonders_on_kingdom_id_and_status"
+    t.index ["kingdom_id"], name: "index_wonders_on_kingdom_id"
+    t.index ["kingdom_id"], name: "index_wonders_on_kingdom_id_when_live", unique: true, where: "((status)::text = ANY ((ARRAY['foundation'::character varying, 'construction'::character varying, 'consecration'::character varying])::text[]))"
+  end
+
   create_table "world_invitations", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.citext "email", null: false
@@ -457,6 +496,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_200001) do
   add_foreign_key "trade_ledger_entries", "worlds"
   add_foreign_key "training_orders", "buildings"
   add_foreign_key "training_orders", "kingdoms"
+  add_foreign_key "wonder_damage_events", "battles", on_delete: :nullify
+  add_foreign_key "wonder_damage_events", "kingdoms", column: "attacker_kingdom_id"
+  add_foreign_key "wonder_damage_events", "wonders"
+  add_foreign_key "wonders", "kingdoms"
   add_foreign_key "world_invitations", "admins", column: "invited_by_admin_id"
   add_foreign_key "world_invitations", "worlds"
   add_foreign_key "worlds", "kingdoms", column: "winner_kingdom_id"

@@ -6,6 +6,7 @@ module Buildings
     class InvalidTargetLevel < StandardError; end
     class TierGateUnmet < StandardError; end
     class QueueFull < StandardError; end
+    class WonderInProgress < StandardError; end
 
     BUILDABLE_WORLD_STATUSES = %w[grace active].freeze
 
@@ -26,6 +27,9 @@ module Buildings
         raise UnknownBuilding, "unknown building #{@kind}" unless Catalog.kind?(@kind)
         raise WorldNotBuildable, "world status #{kingdom.world.status} not buildable" unless BUILDABLE_WORLD_STATUSES.include?(kingdom.world.status)
         raise KingdomEliminated, "kingdom eliminated" if kingdom.eliminated?
+        if Wonders::LiveFor.call(kingdom).present?
+          raise WonderInProgress, "build queue locked: a Wonder is in progress"
+        end
 
         # Resolve any ripe completions first so slot count + tier gates reflect reality.
         Buildings::ResolveCompletions.call(kingdom)

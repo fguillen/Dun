@@ -349,36 +349,40 @@ Implements `§12` (caravans, escort, interception) and `§17.2` (public ledger).
 Implements `§14` and `§16.2`. Round-end critical path.
 
 ### Models
-- [ ] `Wonder` (kingdom_id, name, status: foundation|construction|consecration|completed|destroyed, hp, target_hp, started_at, phase_change_at, milestones_paid jsonb)
-- [ ] `WonderDamageEvent` (wonder_id, attacker_kingdom_id, hp_before, hp_after, battle_id, occurred_at)
+- [x] `Wonder` (kingdom_id, name, status: foundation|construction|consecration|completed|destroyed, hp, target_hp, started_at, construction_started_at, consecration_at, completed_at, destroyed_at, paused_until, last_construction_at, pending_milestone_percent, milestones_paid jsonb, repaired_hp_by_phase jsonb) — partial unique index on `kingdom_id` for live statuses
+- [x] `WonderDamageEvent` (wonder_id, attacker_kingdom_id, battle_id, trebuchets_surviving, hp_before, hp_after, occurred_at)
 
 ### Services
-- [ ] `Wonders::Prerequisites.call(kingdom)` — building levels, ≥3 controlled nodes, unlock cost equal to Foundation payment (`§14`/`§16.2`)
-- [ ] `Wonders::Start.call(kingdom, wonder_name)` — deduct 25% upfront, lock build queue (no other building upgrades) per `§14`, fire world announcement, HP=1000
-- [ ] `Wonders::ApplyConstruction` (tick): +100 HP/h to 10,000 across 90h
-- [ ] `Wonders::Milestone.call(wonder, percent)` — at 25/50/75% completion, demand 10% payment; pause construction until paid
-- [ ] `Wonders::Damage.call(wonder, trebuchet_count_surviving)` — `-50 HP × trebuchets` per attack; if HP reaches 0 → `Wonders::Destroy.call` (resources lost, queue unlocked, builder may restart)
-- [ ] `Wonders::Repair.call(wonder, hp)` — 1 HP per 8 Stone, cap 2000 HP per phase, pause construction 30 min per 500 HP repaired
-- [ ] `Wonders::EnterConsecration.call(wonder)` — pay 5%, 24h timer scheduled, world announcement
-- [ ] `Wonders::Complete.call(wonder)` — if Consecration ends with HP>0 → trigger round end
-- [ ] No new weather windows scheduled once Consecration begins (`§16.11`)
+- [x] `Wonders::Prerequisites.call(kingdom:)` — world active, building gates (town_hall 10, quarry 10, siege_workshop 5), ≥3 controlled nodes, affordable; raises `NotMet(reason:)` (`§14`/`§16.2`)
+- [x] `Wonders::Start.call(kingdom:, name:)` — deduct 25% upfront, status goes straight to `construction` per §14 ("Foundation is instant"), schedules +90h transition, emits `dun.wonder.started`, HP=1000
+- [x] `Wonders::ApplyConstruction` (lazy, no per-tick writer) — accrues 100 HP/h from `last_construction_at`, clamps at milestones, respects `paused_until`
+- [x] `Wonders::PayMilestone.call(wonder:, percent:)` — explicit pay (player calls after auto-pause at 25/50/75%); deducts 10%, clears pending, resumes from `now`
+- [x] `Wonders::Damage.call(wonder:, attacker_kingdom:, trebuchets_surviving:, battle:)` — `-50 HP × trebuchets`; records `WonderDamageEvent`; if HP→0 → `Wonders::Destroy.call` (resources lost, queue unlocked, builder may restart)
+- [x] `Wonders::Repair.call(wonder:, hp:)` — 1 HP per 8 Stone, cap 2000 HP per phase (independent), pause construction 30 min per 500 HP repaired (stacks)
+- [x] `Wonders::EnterConsecration.call(wonder:)` — scheduled handler at +90h: pay 5%, schedule complete at +24h, emit `dun.wonder.entered_consecration`; re-schedules if not ready
+- [x] `Wonders::Complete.call(wonder:)` — if Consecration ends with HP>0 → minimal world archive (winner_kingdom_id, wonder_name, status: archived); full freeze deferred to Phase 10
+- [x] `Wonders::Destroy.call(wonder:)` — flips status, cancels pending `wonder_phase` events, emits `dun.wonder.destroyed`
+- [x] `Wonders::Cancel.call(wonder:)` — voluntary abandonment (same effect as destruction)
+- [x] `Wonders::LiveFor.call(kingdom)` — used by `Buildings::Queue` lock and combat damage hook
+- [ ] No new weather windows scheduled once Consecration begins — deferred to Phase 12 (`§16.11`)
 
 ### API endpoints
-- [ ] `GET  /v1/kingdoms/:id/wonder` (status, HP, milestone, ETA)
-- [ ] `POST /v1/kingdoms/:id/wonder` — `{name}` (start)
-- [ ] `POST /v1/kingdoms/:id/wonder/repair` — `{hp}`
-- [ ] `POST /v1/kingdoms/:id/wonder/cancel`
-- [ ] `GET  /v1/worlds/:id/wonders` (public list)
+- [x] `GET    /v1/kingdoms/:id/wonder` (status, HP, milestone, paused_until, etc.)
+- [x] `POST   /v1/kingdoms/:id/wonder` — `{name}` (start)
+- [x] `POST   /v1/kingdoms/:id/wonder/repair` — `{hp}`
+- [x] `POST   /v1/kingdoms/:id/wonder/milestone` — `{percent}`
+- [x] `DELETE /v1/kingdoms/:id/wonder` (cancel; status→destroyed)
+- [x] `GET    /v1/worlds/:id/wonders` (public list)
 
 ### Tests
-- [ ] Foundation payment exact: 25% per `§16.2` table
-- [ ] Milestone payments freeze construction when missed
-- [ ] Trebuchet damage = 50 × surviving units
-- [ ] Repair cap 2000 HP per phase enforced independently per phase
-- [ ] Consecration timer scheduled correctly, world announcement fired
-- [ ] Destruction restart loses all paid resources
-- [ ] Build queue locked during construction; unit training continues
-- [ ] No weather windows spawn during Consecration (active ones run to scheduled end)
+- [x] Foundation payment exact: 25% per `§16.2` table
+- [x] Milestone payments freeze construction when missed
+- [x] Trebuchet damage = 50 × surviving units
+- [x] Repair cap 2000 HP per phase enforced independently per phase
+- [x] Consecration timer scheduled correctly, world announcement fired
+- [x] Destruction restart loses all paid resources
+- [x] Build queue locked during construction; unit training continues
+- [ ] No weather windows spawn during Consecration — deferred to Phase 12
 
 ---
 
