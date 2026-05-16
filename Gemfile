@@ -27,7 +27,7 @@ gem "kamal", require: false
 gem "thruster", require: false
 
 # Pagination
-gem "pagy", "~> 9.0"
+gem "pagy", "~> 43.5"
 
 # Data-only migrations alongside schema migrations
 gem "data_migrate"
