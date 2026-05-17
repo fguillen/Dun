@@ -1047,6 +1047,46 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
+  /kingdoms/{id}/build/preview:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: previewBuildUpgrade
+      tags: [Player kingdoms]
+      summary: Preview the cost of the next building upgrade
+      description: |
+        Returns the resource cost, duration, tier-gate status, and affordability
+        for the next level of a building. Informational only — it reports cost
+        regardless of world status, kingdom-eliminated, wonder-in-progress, or
+        build-queue slot availability. The actual `POST /kingdoms/{id}/build`
+        still enforces those at commit time.
+
+        `Buildings::ResolveCompletions` runs first so `current_level` reflects
+        any builds that have ripened since the last request.
+      security: [{ playerBearer: [] }]
+      parameters:
+        - in: query
+          name: building
+          required: true
+          schema:
+            type: string
+            enum:
+              [ town_hall, gold_mint, lumber_camp, quarry, iron_mine, warehouse,
+                barracks, stable, siege_workshop, walls, watchtower, stone_mason ]
+      responses:
+        "200":
+          description: Upgrade preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BuildingUpgradePreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`unknown_building`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
   /kingdoms/{kingdom_id}/build/{id}:
     parameters:
       - in: path
@@ -1115,6 +1155,52 @@ paths:
             `unknown_unit`, `building_missing`, `unit_not_trainable_here`,
             `world_not_buildable`, `kingdom_eliminated`, or
             `insufficient_resources`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /kingdoms/{id}/train/preview:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: previewTrainingOrder
+      tags: [Player kingdoms]
+      summary: Preview the cost of a training order
+      description: |
+        Returns per-unit and total cost, per-unit and total time, affordability,
+        and `max_affordable_count` (the largest count the current stockpile
+        would support). Informational only — `unit_trainable_here: false` and
+        `building_built: false` are advisory flags; the actual
+        `POST /kingdoms/{id}/train` still rejects mismatched combinations.
+
+        `Training::ResolveCompletions` runs first so `building_level` reflects
+        any training that has ripened since the last request.
+      security: [{ playerBearer: [] }]
+      parameters:
+        - in: query
+          name: building
+          required: true
+          schema:
+            type: string
+            enum: [barracks, stable, siege_workshop]
+        - in: query
+          name: unit
+          required: true
+          schema: { $ref: "#/components/schemas/Unit" }
+        - in: query
+          name: count
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Training preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainingPreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`unknown_unit`, `invalid_building_kind`, or `invalid_count`."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -2537,6 +2623,52 @@ components:
         completed_at: { type: [string, "null"], format: date-time }
         cancelled_at: { type: [string, "null"], format: date-time }
 
+    BuildingUpgradePreview:
+      type: object
+      required:
+        [ kind, current_level, target_level, at_max_level, cost,
+          duration_seconds, tier_gates_met, tier_gates_unmet, affordable, missing ]
+      properties:
+        kind:
+          type: string
+          enum:
+            [ town_hall, gold_mint, lumber_camp, quarry, iron_mine, warehouse,
+              barracks, stable, siege_workshop, walls, watchtower, stone_mason ]
+        current_level: { type: integer, minimum: 0, maximum: 20 }
+        target_level:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 20
+          description: Next level (`current_level + 1`), or `null` when at max level.
+        at_max_level: { type: boolean }
+        cost:
+          description: Resource cost for the upgrade, or `null` when at max level.
+          oneOf:
+            - $ref: "#/components/schemas/StockpileMap"
+            - type: "null"
+        duration_seconds:
+          type: [integer, "null"]
+          description: |
+            Upgrade duration after Stone Mason discount, or `null` when at max
+            level.
+        tier_gates_met: { type: boolean }
+        tier_gates_unmet:
+          type: array
+          description: Tier prerequisites the kingdom does not yet satisfy.
+          items:
+            type: object
+            required: [kind, required_level, current_level]
+            properties:
+              kind: { type: string }
+              required_level: { type: integer, minimum: 1 }
+              current_level: { type: integer, minimum: 0 }
+        affordable:
+          type: boolean
+          description: True iff the current stockpile covers the full cost.
+        missing:
+          $ref: "#/components/schemas/StockpileMap"
+          description: Per-resource shortfall (0 if no shortfall).
+
     StockpileMap:
       type: object
       description: Per-resource integer amounts after lazy accrual against current rates and Warehouse cap.
@@ -2606,6 +2738,49 @@ components:
         completes_at: { type: string, format: date-time }
         completed_at: { type: [string, "null"], format: date-time }
         cancelled_at: { type: [string, "null"], format: date-time }
+
+    TrainingPreview:
+      type: object
+      required:
+        [ building_kind, unit, count, building_level, building_built,
+          unit_trainable_here, per_unit_cost, total_cost,
+          per_unit_seconds, total_seconds, affordable, missing,
+          max_affordable_count ]
+      properties:
+        building_kind:
+          type: string
+          enum: [barracks, stable, siege_workshop]
+        unit: { $ref: "#/components/schemas/Unit" }
+        count: { type: integer, minimum: 1 }
+        building_level:
+          type: integer
+          minimum: 0
+          description: 0 if the building has not been built yet.
+        building_built: { type: boolean }
+        unit_trainable_here:
+          type: boolean
+          description: True iff `unit` is allowed at `building_kind` (advisory).
+        per_unit_cost: { $ref: "#/components/schemas/StockpileMap" }
+        total_cost:
+          $ref: "#/components/schemas/StockpileMap"
+          description: per_unit_cost × count.
+        per_unit_seconds:
+          type: integer
+          description: Training time per unit at the current building level.
+        total_seconds:
+          type: integer
+          description: per_unit_seconds × count.
+        affordable: { type: boolean }
+        missing:
+          $ref: "#/components/schemas/StockpileMap"
+          description: Per-resource shortfall against the current stockpile (0 if covered).
+        max_affordable_count:
+          type: integer
+          minimum: 0
+          description: |
+            Largest count the current stockpile can fully fund, computed as
+            `min(stockpile[r] // per_unit_cost[r])` across resources where the
+            per-unit cost is positive.
 
     Composition:
       type: object

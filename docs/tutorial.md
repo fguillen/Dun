@@ -758,6 +758,32 @@ curl http://localhost:3000/v1/kingdoms/01HK... \
 
 `200 OK` — materialized stockpiles, production rates, all buildings with their current level, and any in-progress build orders. The server lazily accrues stockpiles from the last checkpoint against current production and the Warehouse cap *before* serializing, so the numbers are current. Ripe build orders are resolved on the same call.
 
+**Preview the cost before queuing.**
+
+```bash
+curl "http://localhost:3000/v1/kingdoms/01HK.../build/preview?building=warehouse" \
+  -H 'Authorization: Bearer k_live_player_xyz...'
+```
+
+`200 OK`:
+
+```json
+{
+  "kind": "warehouse",
+  "current_level": 1,
+  "target_level": 2,
+  "at_max_level": false,
+  "cost": { "gold": 88, "wood": 350, "stone": 175, "iron": 35 },
+  "duration_seconds": 279,
+  "tier_gates_met": true,
+  "tier_gates_unmet": [],
+  "affordable": true,
+  "missing": { "gold": 0, "wood": 0, "stone": 0, "iron": 0 }
+}
+```
+
+The preview is informational only — it returns the cost even when the world is not in a buildable state or a tier gate is unmet (`tier_gates_unmet` lists the prerequisites you still need). The `POST .../build` call is what enforces those at commit time. If the building is already at `MAX_LEVEL`, `target_level`, `cost`, and `duration_seconds` come back as `null` with `at_max_level: true`.
+
 **Queue a building upgrade.**
 
 ```bash
@@ -785,11 +811,40 @@ curl -X DELETE http://localhost:3000/v1/kingdoms/01HK.../build/01HB... \
 
 **Why upgrade the Warehouse early.** Stockpile cap scales quadratically with Warehouse level (roughly 1M per resource at L20). Hitting the cap means production silently caps out — visible by comparing `production_rate` to actual stockpile growth in successive dashboard reads.
 
-See [openapi.yaml](openapi.yaml) — `showKingdom`, `queueBuildOrder`, `cancelBuildOrder`.
+See [openapi.yaml](openapi.yaml) — `showKingdom`, `previewBuildUpgrade`, `queueBuildOrder`, `cancelBuildOrder`.
 
 ### 3.7 Your first steps — Military
 
 Each military building has its own independent FIFO training queue (§11): Barracks, Stable, Siege Workshop. They run in parallel — three orders, one per building, all training at once.
+
+**Preview the cost before queuing.**
+
+```bash
+curl "http://localhost:3000/v1/kingdoms/01HK.../train/preview?building=barracks&unit=pikeman&count=10" \
+  -H 'Authorization: Bearer k_live_player_xyz...'
+```
+
+`200 OK`:
+
+```json
+{
+  "building_kind": "barracks",
+  "unit": "pikeman",
+  "count": 10,
+  "building_level": 3,
+  "building_built": true,
+  "unit_trainable_here": true,
+  "per_unit_cost": { "gold": 40, "wood": 50, "stone": 10, "iron": 40 },
+  "total_cost":    { "gold": 400, "wood": 500, "stone": 100, "iron": 400 },
+  "per_unit_seconds": 162,
+  "total_seconds": 1620,
+  "affordable": true,
+  "missing": { "gold": 0, "wood": 0, "stone": 0, "iron": 0 },
+  "max_affordable_count": 125
+}
+```
+
+`max_affordable_count` is the largest count your current stockpile can fully fund — useful when you want to "train as many as I can afford" without trial-and-error. `unit_trainable_here` and `building_built` are advisory flags: the preview still reports cost even when they're false, but the actual `POST .../train` will reject the combo.
 
 **Queue a training order.**
 
@@ -832,7 +887,7 @@ curl http://localhost:3000/v1/kingdoms/01HK.../armies \
 
 Newly-trained units land in your home Garrison automatically. Split them out into named armies in [§3.9](#39-march-scout-reinforce).
 
-See [openapi.yaml](openapi.yaml) — `queueTrainingOrder`, `cancelTrainingOrder`, `listKingdomArmies`.
+See [openapi.yaml](openapi.yaml) — `previewTrainingOrder`, `queueTrainingOrder`, `cancelTrainingOrder`, `listKingdomArmies`.
 
 ### 3.8 Read the map
 

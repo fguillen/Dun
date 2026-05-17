@@ -297,6 +297,21 @@ Buildings::Complete.call(build_order)
 
 This endpoint is the workhorse of the CLI's `kingdom show` command — it's expected to be called frequently. Hence the lazy projection: every call is a small handful of reads, no writes (unless the player has ripe completions, which trigger a lazy resolve via subsequent writes — `GET` itself never mutates).
 
+### Upgrade preview
+
+`GET /v1/kingdoms/:id/build/preview?building=<kind>` is served by [Api::Kingdoms::BuildOrdersController#preview](../../app/controllers/api/kingdoms/build_orders_controller.rb) and delegates to `Buildings::UpgradePreview`. It composes the existing primitives:
+
+- `Buildings::CostFor.call(kind:, level: current + 1)` → resource cost
+- `Buildings::TimeFor.call(kind:, level: current + 1, kingdom:)` → duration after the Stone Mason discount
+- `Stockpile::Read.call(kingdom)` → current stockpile, used to derive `affordable` and per-resource `missing`
+- `Buildings::Catalog::TIER_GATES[kind]` → `tier_gates_unmet` list (same logic as `Buildings::Queue#enforce_tier_gates!`)
+
+`Buildings::ResolveCompletions` runs first so `current_level` reflects any ripe orders.
+
+**The preview is informational only.** It does *not* enforce world status, kingdom-eliminated, wonder-in-progress, or build-queue slot availability. `Buildings::Queue` still rejects those at commit time with the precise reason. Rationale: the preview answers "what would this cost?", which is useful even when "can I commit it right now?" is false. Splitting the two keeps the UI simple — render the cost, then let the POST do the gating.
+
+At max level (`current_level >= Catalog::MAX_LEVEL`), `target_level`, `cost`, and `duration_seconds` are returned as `null` with `at_max_level: true`.
+
 ---
 
 ## Stretching, gotchas, anti-patterns

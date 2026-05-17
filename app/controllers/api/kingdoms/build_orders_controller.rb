@@ -12,6 +12,18 @@ module Api
         render_error(code: "build_order_already_resolved", message: e.message, status: :unprocessable_entity)
       end
 
+      def preview
+        kingdom = load_kingdom
+        kind = params.require(:building).to_s
+
+        Buildings::ResolveCompletions.call(kingdom)
+        kingdom.reload
+
+        render json: Buildings::UpgradePreview.call(kingdom: kingdom, kind: kind)
+      rescue Buildings::UpgradePreview::UnknownBuilding => e
+        render_error(code: "unknown_building", message: e.message, status: :unprocessable_entity)
+      end
+
       private
 
       def load_kingdom

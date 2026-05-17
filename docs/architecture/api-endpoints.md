@@ -113,6 +113,7 @@ See [04-economy-and-buildings.md](04-economy-and-buildings.md).
 | Method | Path | Service | Notes |
 |---|---|---|---|
 | GET | `/v1/kingdoms/:id` | `Stockpile::Read`, `Production::RateFor` | full kingdom status; lazy-projects resources |
+| GET | `/v1/kingdoms/:id/build/preview?building=` | `Buildings::UpgradePreview` | next-level cost, duration, tier-gate status, affordability — read-only |
 | POST | `/v1/kingdoms/:id/build` | `Buildings::Queue` | queue an upgrade; deducts via `Stockpile::Apply`, schedules `build_completion` |
 | DELETE | `/v1/kingdoms/:id/build/:order_id` | `Buildings::Cancel` | 75% refund, time lost, cancels scheduled event |
 
@@ -126,6 +127,7 @@ See [06-military.md](06-military.md).
 
 | Method | Path | Service | Notes |
 |---|---|---|---|
+| GET | `/v1/kingdoms/:id/train/preview?building=&unit=&count=` | `Training::Preview` | per-unit + total cost/time, affordability, `max_affordable_count` — read-only |
 | POST | `/v1/kingdoms/:id/train` | `Training::Queue` | independent queues per barracks/stable/siege_workshop |
 | DELETE | `/v1/kingdoms/:id/train/:order_id` | `Training::Cancel` | 75% refund per unit count |
 

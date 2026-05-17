@@ -109,6 +109,83 @@ module Api
           headers: auth_headers
         assert_response :not_found
       end
+
+      test "GET preview returns per-unit and total cost, total time, max_affordable_count" do
+        get "/v1/kingdoms/#{@kingdom.id}/train/preview",
+          params: { building: "barracks", unit: "levy", count: 5 },
+          headers: auth_headers
+        assert_response :success
+        body = response.parsed_body
+        per_unit = ::Units::Catalog.cost_for("levy")
+        assert_equal per_unit, body["per_unit_cost"]
+        assert_equal per_unit.transform_values { |v| v * 5 }, body["total_cost"]
+        assert_equal "barracks", body["building_kind"]
+        assert_equal "levy", body["unit"]
+        assert_equal 5, body["count"]
+        assert_equal true, body["building_built"]
+        assert_equal true, body["unit_trainable_here"]
+        assert_equal true, body["affordable"]
+        assert body["max_affordable_count"] >= 5
+        assert body["per_unit_seconds"] > 0
+        assert_equal body["per_unit_seconds"] * 5, body["total_seconds"]
+      end
+
+      test "GET preview surfaces shortfall via missing and affordable=false" do
+        @kingdom.update!(stockpiles: {
+          "gold" => 10, "wood" => 10, "stone" => 10, "iron" => 10,
+          "checkpoint_at" => Time.current.iso8601
+        })
+        get "/v1/kingdoms/#{@kingdom.id}/train/preview",
+          params: { building: "barracks", unit: "pikeman", count: 1 },
+          headers: auth_headers
+        assert_response :success
+        body = response.parsed_body
+        assert_equal false, body["affordable"]
+        assert body["missing"]["iron"] > 0
+      end
+
+      test "GET preview returns unit_trainable_here=false for unit/building mismatch (informational)" do
+        @kingdom.buildings.find_by(kind: "stable").update!(level: 1)
+        get "/v1/kingdoms/#{@kingdom.id}/train/preview",
+          params: { building: "stable", unit: "levy", count: 1 },
+          headers: auth_headers
+        assert_response :success
+        body = response.parsed_body
+        assert_equal false, body["unit_trainable_here"]
+      end
+
+      test "GET preview returns 422 for unknown unit" do
+        get "/v1/kingdoms/#{@kingdom.id}/train/preview",
+          params: { building: "barracks", unit: "ninja", count: 1 },
+          headers: auth_headers
+        assert_response :unprocessable_entity
+        assert_equal "unknown_unit", response.parsed_body.dig("error", "code")
+      end
+
+      test "GET preview returns 422 for invalid building kind" do
+        get "/v1/kingdoms/#{@kingdom.id}/train/preview",
+          params: { building: "warehouse", unit: "levy", count: 1 },
+          headers: auth_headers
+        assert_response :unprocessable_entity
+        assert_equal "invalid_building_kind", response.parsed_body.dig("error", "code")
+      end
+
+      test "GET preview returns 422 for non-positive count" do
+        get "/v1/kingdoms/#{@kingdom.id}/train/preview",
+          params: { building: "barracks", unit: "levy", count: 0 },
+          headers: auth_headers
+        assert_response :unprocessable_entity
+        assert_equal "invalid_count", response.parsed_body.dig("error", "code")
+      end
+
+      test "GET preview returns 404 for non-owner" do
+        stranger = create(:player)
+        authenticate_as_player(stranger)
+        get "/v1/kingdoms/#{@kingdom.id}/train/preview",
+          params: { building: "barracks", unit: "levy", count: 1 },
+          headers: auth_headers
+        assert_response :not_found
+      end
     end
   end
 end

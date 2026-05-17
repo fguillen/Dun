@@ -35,6 +35,26 @@ module Api
         render_error(code: "training_order_already_resolved", message: e.message, status: :unprocessable_entity)
       end
 
+      def preview
+        kingdom = load_kingdom
+        building_kind = params.require(:building).to_s
+        unit = params.require(:unit).to_s
+        count = params.require(:count).to_i
+
+        Training::ResolveCompletions.call(kingdom)
+        kingdom.reload
+
+        render json: Training::Preview.call(
+          kingdom: kingdom, building_kind: building_kind, unit: unit, count: count
+        )
+      rescue Training::Preview::UnknownUnit => e
+        render_error(code: "unknown_unit", message: e.message, status: :unprocessable_entity)
+      rescue Training::Preview::InvalidBuildingKind => e
+        render_error(code: "invalid_building_kind", message: e.message, status: :unprocessable_entity)
+      rescue Training::Preview::InvalidCount => e
+        render_error(code: "invalid_count", message: e.message, status: :unprocessable_entity)
+      end
+
       def self.serialize(order)
         {
           id: order.id,

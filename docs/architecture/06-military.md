@@ -69,6 +69,18 @@ time_per_unit(unit, building_level) = base_train_time × (0.95)^(level - 1)
 
 `Training::Cancel` mirrors `Buildings::Cancel`: 75% refund of total cost (count-aware), cancels the scheduled event.
 
+### Training preview
+
+`GET /v1/kingdoms/:id/train/preview?building=&unit=&count=` is served by [Api::Kingdoms::TrainingOrdersController#preview](../../app/controllers/api/kingdoms/training_orders_controller.rb) and delegates to `Training::Preview`. It returns:
+
+- `per_unit_cost`, `total_cost` — from `Units::Catalog.cost_for(unit)` × `count`
+- `per_unit_seconds`, `total_seconds` — from `Units::TrainingTimeFor.call(unit:, building_level:)` × `count`
+- `affordable`, `missing` — vs. `Stockpile::Read.call(kingdom)`
+- `max_affordable_count` — `min(stockpile[r] // per_unit_cost[r])` across resources where the per-unit cost is positive. Useful UX hook for "train as many as I can afford".
+- `building_built` and `unit_trainable_here` — advisory flags. `Training::Preview` reports cost regardless; the actual `Training::Queue` rejects the mismatched combo at commit.
+
+`Training::ResolveCompletions` runs first so `building_level` (which feeds the time discount) reflects any ripe training. The same informational-only stance applies as in the building preview: the preview reports cost even when the world is not buildable or the kingdom is eliminated, and the POST is what enforces.
+
 ### Where do trained units go?
 
 [Training::Complete](../../app/services/training/complete.rb#L37) merges the new units into a special `"Garrison"` army for that kingdom:
