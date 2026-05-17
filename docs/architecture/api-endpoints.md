@@ -95,6 +95,7 @@ See [03-worlds-and-maps.md](03-worlds-and-maps.md).
 
 | Method | Path | Service | Notes |
 |---|---|---|---|
+| GET | `/v1/servers/:id/worlds` | — | list every world on a server you belong to (lean shape — no `my_kingdom`); 404 to non-members |
 | POST | `/v1/worlds/:id/join` | `Worlds::Join` | join during proposed or grace; `AssignLateJoiner` during grace |
 | GET | `/v1/worlds/:id` | — | world summary + your kingdom |
 | GET | `/v1/worlds/:id/map` | — | full region/adjacency map |

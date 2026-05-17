@@ -22,6 +22,7 @@ Rails.application.routes.draw do
 
       scope module: :servers do
         resources :players, only: %i[show], param: :handle
+        resources :worlds,  only: %i[index]
       end
     end
 

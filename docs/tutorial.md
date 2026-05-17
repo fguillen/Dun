@@ -654,16 +654,45 @@ See [openapi.yaml](openapi.yaml) — `listPlayerServers`, `joinServer`.
 
 ### 3.4 Browse available worlds
 
-The player API today has **no "list worlds on this server" endpoint** — you look up worlds by ID. You'll get those IDs out-of-band: an admin shares them, a CLI client surfaces them, or you're notified via a `WorldInvitation` (informational only — see [§2.9](#29-world-level-invitations-optional)).
+Once you're a member of a server, list every world hosted on it — past and present, every status:
 
-Once you have a world ID:
+```bash
+curl http://localhost:3000/v1/servers/01HX.../worlds \
+  -H 'Authorization: Bearer k_live_player_xyz...'
+```
+
+`200 OK`:
+
+```json
+{
+  "worlds": [
+    {
+      "id": "01HW...",
+      "server_id": "01HX...",
+      "name": "Spring 2026",
+      "slug": "spring-2026",
+      "status": "proposed",
+      "min_players": 4,
+      "t0_at": "2026-05-24T18:00:00Z",
+      "grace_closes_at": null,
+      "archived_at": null,
+      "cancelled_at": null,
+      "wonder_name": null
+    }
+  ]
+}
+```
+
+Ordered by `t0_at` descending — upcoming rounds come first, archived/cancelled history follows. Non-members of the server get `404`, not `403` (existence isn't disclosed across server boundaries).
+
+The list shape is intentionally lean — no `my_kingdom`, no `region_count`/`kingdom_count`. To fetch the full detail for a single world (including your kingdom summary if you've joined), call:
 
 ```bash
 curl http://localhost:3000/v1/worlds/01HW... \
   -H 'Authorization: Bearer k_live_player_xyz...'
 ```
 
-`200 OK` — the world detail. Key fields to read before deciding to join:
+`200 OK` — the full world detail. Key fields to read before deciding to join:
 
 - `status` — `proposed` (joinable, T0 not yet reached), `grace` (joinable, late-join window), `active` (closed), `archived` / `cancelled` (terminal).
 - `t0_at` — when the round will start (if `proposed`).
@@ -671,9 +700,9 @@ curl http://localhost:3000/v1/worlds/01HW... \
 - `min_players` and current join count.
 - Region count and any caller-side kingdom summary if you've already joined.
 
-Non-members of the server get `404`, not `403` — world existence isn't disclosed across server boundaries.
+You may also learn about specific worlds out-of-band: an admin shares an ID, a CLI client surfaces it, or you're notified via a `WorldInvitation` (informational only — see [§2.9](#29-world-level-invitations-optional)).
 
-See [openapi.yaml](openapi.yaml) — `showWorld`.
+See [openapi.yaml](openapi.yaml) — `listServerWorlds`, `showWorld`.
 
 ### 3.5 Join a world
 

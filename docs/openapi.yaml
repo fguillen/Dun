@@ -283,6 +283,37 @@ paths:
                 forbidden: { value: { error: { code: forbidden, message: "You are not admitted to this server" } } }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /servers/{id}/worlds:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: listServerWorlds
+      tags: [Player worlds]
+      summary: List worlds on a server the caller is a member of
+      description: |
+        Returns every `World` on the server, of any status, ordered by `t0_at`
+        descending. Caller must be a member of the server (non-members get
+        `404` — existence is not disclosed across server boundaries).
+
+        Lean shape: omits `region_count`, `kingdom_count`, and `my_kingdom`.
+        Use `GET /worlds/{id}` to fetch full per-world detail including the
+        caller's kingdom.
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: List of worlds on the server.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [worlds]
+                properties:
+                  worlds:
+                    type: array
+                    items: { $ref: "#/components/schemas/WorldSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /servers/{id}/me:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -2289,6 +2320,34 @@ components:
         status: { type: string, enum: [proposed, grace, active, archived, cancelled] }
         min_players: { type: integer }
         auto_cancel_after_hours: { type: integer }
+        t0_at: { type: string, format: date-time }
+        grace_closes_at: { type: [string, "null"], format: date-time }
+        archived_at: { type: [string, "null"], format: date-time }
+        cancelled_at: { type: [string, "null"], format: date-time }
+        wonder_name: { type: [string, "null"] }
+
+    WorldSummary:
+      type: object
+      description: |
+        Lean player-side world entry used by `GET /servers/{id}/worlds`. Omits
+        `region_count`/`kingdom_count` and `my_kingdom` (use `GET /worlds/{id}`
+        for full detail). Includes lifecycle timestamps so listings can show
+        archived/cancelled state.
+      required:
+        - id
+        - server_id
+        - name
+        - slug
+        - status
+        - min_players
+        - t0_at
+      properties:
+        id: { type: string }
+        server_id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        status: { type: string, enum: [proposed, grace, active, archived, cancelled] }
+        min_players: { type: integer }
         t0_at: { type: string, format: date-time }
         grace_closes_at: { type: [string, "null"], format: date-time }
         archived_at: { type: [string, "null"], format: date-time }

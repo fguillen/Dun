@@ -267,6 +267,7 @@ Late joiners after this point are rejected by [Worlds::Join](../../app/services/
 
 | Endpoint | Purpose |
 |---|---|
+| `GET /v1/servers/:id/worlds` | List every world on a server you belong to (lean — no `my_kingdom`, no counts), ordered `t0_at` desc; 404 to non-members |
 | `GET /v1/worlds/:id` | World summary: status, region count, kingdom count, your kingdom summary |
 | `GET /v1/worlds/:id/map` | Full map: regions + adjacencies. Large but cacheable. |
 | `GET /v1/worlds/:id/regions/:region_id` | One region's detail |
