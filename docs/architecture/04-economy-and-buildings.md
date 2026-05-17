@@ -312,6 +312,18 @@ This endpoint is the workhorse of the CLI's `kingdom show` command — it's expe
 
 At max level (`current_level >= Catalog::MAX_LEVEL`), `target_level`, `cost`, and `duration_seconds` are returned as `null` with `at_max_level: true`.
 
+### Buildings list
+
+`GET /v1/kingdoms/:kingdom_id/buildings` is served by [Api::Kingdoms::BuildingsController#index](../../app/controllers/api/kingdoms/buildings_controller.rb) and delegates to `Buildings::ListPreviews`. It returns one row per kind in `Buildings::Catalog::KINDS` (12 entries, sorted alphabetically). Each row is the `Buildings::UpgradePreview` payload — *the cost / duration / tier-gate / affordability logic is not duplicated* — with three fields merged on top:
+
+- `id` — the `Building` row's id (`null` only on the rare bootstrap edge case where no row exists for the kind).
+- `build_order` — the in-progress `BuildOrder` for that building (serialized via `Api::KingdomsController.serialize_build_order`), or `null`.
+- `upgrade_possible` — `true` iff `!at_max_level && tier_gates_met && affordable && build_order.nil?`. The fourth clause mirrors `Buildings::Queue`'s rejection of a second order against the same building.
+
+The endpoint accepts `?upgrade_possible=true` (also `1`) to narrow the result to actionable rows; any other value (including absent) returns the full list. The per-row shape is identical in both cases — the filter only narrows the array.
+
+Like `build/preview`, `Buildings::ResolveCompletions` runs first so the snapshot reflects ripe builds. Rationale for the endpoint: clients (CLI, future UIs) need to render the "build" screen in one round trip; calling `build/preview?building=<kind>` twelve times in a loop is wasteful and races against tick state.
+
 ---
 
 ## Stretching, gotchas, anti-patterns

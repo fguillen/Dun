@@ -758,6 +758,49 @@ curl http://localhost:3000/v1/kingdoms/01HK... \
 
 `200 OK` — materialized stockpiles, production rates, all buildings with their current level, and any in-progress build orders. The server lazily accrues stockpiles from the last checkpoint against current production and the Warehouse cap *before* serializing, so the numbers are current. Ripe build orders are resolved on the same call.
 
+**List all buildings with upgrade detail.**
+
+The dashboard tells you what you have. To find out what you can upgrade *right now* without making twelve preview calls, hit:
+
+```bash
+curl http://localhost:3000/v1/kingdoms/01HK.../buildings \
+  -H 'Authorization: Bearer k_live_player_xyz...'
+```
+
+`200 OK` — one entry per building kind (12 entries, sorted alphabetically), each carrying the full upgrade-preview payload plus an `id`, an `upgrade_possible` flag, and the in-progress `build_order` for that building (or `null`):
+
+```json
+{
+  "kingdom_id": "01HK...",
+  "buildings": [
+    {
+      "id": "01HB...",
+      "kind": "barracks",
+      "current_level": 1,
+      "target_level": 2,
+      "at_max_level": false,
+      "cost": { "gold": 263, "wood": 350, "stone": 175, "iron": 88 },
+      "duration_seconds": 300,
+      "tier_gates_met": true,
+      "tier_gates_unmet": [],
+      "affordable": true,
+      "missing": { "gold": 0, "wood": 0, "stone": 0, "iron": 0 },
+      "upgrade_possible": true,
+      "build_order": null
+    }
+  ]
+}
+```
+
+`upgrade_possible` is `true` iff the building is below `MAX_LEVEL`, every tier gate is satisfied, the kingdom can pay the cost, **and** there's no in-progress upgrade on that building. An active `build_order` forces it to `false` because the build queue rejects a second order against the same building (you'd get `422 queue_full`).
+
+Pass `?upgrade_possible=true` to narrow the response to the actionable subset — handy for rendering a "Build" tab that only shows what the player can queue this instant:
+
+```bash
+curl "http://localhost:3000/v1/kingdoms/01HK.../buildings?upgrade_possible=true" \
+  -H 'Authorization: Bearer k_live_player_xyz...'
+```
+
 **Preview the cost before queuing.**
 
 ```bash
@@ -795,8 +838,29 @@ curl -X POST http://localhost:3000/v1/kingdoms/01HK.../build \
 
 `201 Created` — returns the `BuildOrder` with `completes_at`. Cost is deducted immediately. Time is `min(base × 1.55^(L-1), 24h) × stone_mason_discount`. `target_level` must equal *current level + 1* — a defensive concurrency check.
 
-**Building catalog:**
-`town_hall`, `gold_mint`, `lumber_camp`, `quarry`, `iron_mine`, `warehouse`, `barracks`, `stable`, `siege_workshop`, `walls`, `watchtower`, `stone_mason`.
+**Building catalog.** Twelve kinds, grouped by role:
+
+*Economy — produce resources at `base_rate × level` per hour.*
+- `gold_mint` — produces **gold** (30/hr at L1, 600/hr at L20).
+- `lumber_camp` — produces **wood** (40/hr at L1, 800/hr at L20).
+- `quarry` — produces **stone** (25/hr at L1, 500/hr at L20). Stone is the late-game bottleneck for Wonders and Walls — bank early.
+- `iron_mine` — produces **iron** (30/hr at L1, 600/hr at L20). Iron gates elite units (Knights, Royal Guard, Trebuchets) and is required at L5 to build a Siege Workshop.
+
+*Storage — raise the ceiling.*
+- `warehouse` — sets the per-resource stockpile cap to `5000 + 2500 × level²` (≈7.5k at L1, ≈255k at L10, ≈1.0M at L20). Resources stop accruing at the cap, so upgrading is what unlocks larger raids and Wonder savings.
+
+*Support — meta-buildings.*
+- `town_hall` — base build queue is one slot; reaching `town_hall` L10 adds a second slot, L20 adds a third. Lets you build two or three things in parallel.
+- `stone_mason` — applies a global discount of `2% per level` to every building's build time, capped at `-30%` (reached at L15). The discount applies retroactively to in-progress and queued orders when an upgrade completes.
+
+*Military — each trains a different unit class and runs its own independent FIFO training queue (see [§3.7](#37-your-first-steps--military)). Upgrading reduces per-unit train time by 5% compounding per level (`base × 0.95^(L-1)`).*
+- `barracks` — trains `levy`, `archer`, `pikeman`. Gates Stable (needs L3) and Siege Workshop (needs L5).
+- `stable` — trains `knight`, `scout`, `royal_guard`. Requires Barracks L3 before you can build it.
+- `siege_workshop` — trains `catapult`, `trebuchet`. Requires Barracks L5 **and** Iron Mine L5.
+
+*Defense — passive, no queue.*
+- `walls` — adds `+1%` per level to your home-region defender bonus on top of the base `+20%`, with a hard cap at `+40%` total (reached at walls L20). Walls also have `1000 HP per level`, which Catapults must chew through before damaging your garrison.
+- `watchtower` — placeholder building; reserved for future early-warning / scouting mechanics. Has no mechanical effect on the current phase but is included so existing kingdoms don't need migration when it lights up.
 
 **Single build slot.** Each kingdom has one active build order at a time. Queueing a second returns `422 queue_full`. Repeated identical orders are idempotent — same `building` + `target_level` returns the existing order without re-deducting.
 

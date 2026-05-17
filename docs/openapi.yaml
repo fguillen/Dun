@@ -1047,6 +1047,50 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
+  /kingdoms/{kingdom_id}/buildings:
+    parameters:
+      - in: path
+        name: kingdom_id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listKingdomBuildings
+      tags: [Player kingdoms]
+      summary: List a kingdom's buildings with upgrade detail
+      description: |
+        Returns one entry per building kind in the catalog (12 entries, sorted by
+        `kind`). Each entry includes the same upgrade-preview detail as
+        `GET /kingdoms/{id}/build/preview` (cost, duration, tier gates,
+        affordability) plus the in-progress `build_order` for that building (if
+        any) and a derived `upgrade_possible` flag.
+
+        `upgrade_possible` is `true` iff the building is not at max level, all
+        tier gates are met, the kingdom can afford the cost, **and** the building
+        does not already have an in-progress upgrade. An active `build_order`
+        forces the flag to `false` because the build queue rejects a second
+        order against the same building.
+
+        `Buildings::ResolveCompletions` runs first so ripe builds are reflected
+        before the snapshot is computed.
+      security: [{ playerBearer: [] }]
+      parameters:
+        - in: query
+          name: upgrade_possible
+          required: false
+          schema: { type: string, enum: ["true", "false", "1", "0"] }
+          description: |
+            When `true` (or `1`), restrict the response to rows where
+            `upgrade_possible == true`. Any other value (including absent)
+            returns the full list.
+      responses:
+        "200":
+          description: List of buildings with upgrade detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KingdomBuildingsList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /kingdoms/{id}/build/preview:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -2668,6 +2712,44 @@ components:
         missing:
           $ref: "#/components/schemas/StockpileMap"
           description: Per-resource shortfall (0 if no shortfall).
+
+    KingdomBuilding:
+      description: |
+        A `BuildingUpgradePreview` extended with the building's id, an
+        `upgrade_possible` flag, and the in-progress `build_order` (if any) for
+        that building.
+      allOf:
+        - $ref: "#/components/schemas/BuildingUpgradePreview"
+        - type: object
+          required: [id, upgrade_possible, build_order]
+          properties:
+            id:
+              type: [string, "null"]
+              description: |
+                Id of the underlying `Building` record. `null` only on the rare
+                bootstrap edge case where the kingdom has no row for this kind.
+            upgrade_possible:
+              type: boolean
+              description: |
+                `true` iff `at_max_level == false` AND `tier_gates_met == true`
+                AND `affordable == true` AND `build_order == null`.
+            build_order:
+              description: In-progress `BuildOrder` for this building, or `null`.
+              oneOf:
+                - $ref: "#/components/schemas/BuildOrder"
+                - type: "null"
+
+    KingdomBuildingsList:
+      type: object
+      required: [kingdom_id, buildings]
+      properties:
+        kingdom_id:
+          type: string
+          description: Echoes the path parameter for client-side reference.
+        buildings:
+          type: array
+          description: One entry per building kind, sorted alphabetically by `kind`.
+          items: { $ref: "#/components/schemas/KingdomBuilding" }
 
     StockpileMap:
       type: object

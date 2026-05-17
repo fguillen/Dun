@@ -113,6 +113,7 @@ See [04-economy-and-buildings.md](04-economy-and-buildings.md).
 | Method | Path | Service | Notes |
 |---|---|---|---|
 | GET | `/v1/kingdoms/:id` | `Stockpile::Read`, `Production::RateFor` | full kingdom status; lazy-projects resources |
+| GET | `/v1/kingdoms/:kingdom_id/buildings` | `Buildings::ListPreviews` | all 12 buildings with upgrade detail, `upgrade_possible` flag, and in-progress build order per row; supports `?upgrade_possible=true` filter |
 | GET | `/v1/kingdoms/:id/build/preview?building=` | `Buildings::UpgradePreview` | next-level cost, duration, tier-gate status, affordability — read-only |
 | POST | `/v1/kingdoms/:id/build` | `Buildings::Queue` | queue an upgrade; deducts via `Stockpile::Apply`, schedules `build_completion` |
 | DELETE | `/v1/kingdoms/:id/build/:order_id` | `Buildings::Cancel` | 75% refund, time lost, cancels scheduled event |
