@@ -190,6 +190,25 @@ curl http://localhost:3000/v1/admin/servers \
   -H 'Authorization: Bearer k_live_abc123...'
 ```
 
+`200 OK`:
+
+```json
+{
+  "servers": [
+    {
+      "id": "01HX...",
+      "slug": "acme",
+      "name": "Acme Co",
+      "max_concurrent_worlds": 2,
+      "max_worlds_per_account": 2,
+      "owner_admin_id": "01HA..."
+    }
+  ]
+}
+```
+
+Returns every server where you hold an adminship (owner or co-admin); servers you don't administer are not disclosed.
+
 See [openapi.yaml](openapi.yaml) — `createServer`, `updateServer`, `listAdminServers`.
 
 ### 2.4 Configure access to the server
