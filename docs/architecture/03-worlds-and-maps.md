@@ -63,6 +63,7 @@ Each transition has a single service. Controllers and jobs both delegate to them
 | [Worlds::Cancel](../../app/services/worlds/cancel.rb) | `POST /v1/admin/worlds/:id/cancel` | Only valid in `proposed`; sets `status: "cancelled"` |
 | [Worlds::Join](../../app/services/worlds/join.rb) | `POST /v1/worlds/:id/join` | Player joins (proposed → adds kingdom; grace → calls `AssignLateJoiner`) |
 | [Worlds::Start](../../app/services/worlds/start.rb) | `Worlds::StartJob` at `t0_at` | Generates map, places T0 kingdoms, transitions to `grace` |
+| [Worlds::ForceStart](../../app/services/worlds/force_start.rb) | `POST /v1/admin/worlds/:id/start` | Admin override: transitions a `proposed` world to `grace` immediately, bypassing both the `t0_at` wait and the `min_players` check. Anchors `t0_at` and `grace_closes_at` to now |
 | [Worlds::EndGrace](../../app/services/worlds/end_grace.rb) | `Worlds::EndGraceJob` at `grace_closes_at` | Releases unused spawn slots, transitions to `active` |
 | [Worlds::Archive](../../app/services/worlds/archive.rb) | (Phase 10, stub today) | Active → archived |
 
@@ -74,7 +75,7 @@ Each transition has a single service. Controllers and jobs both delegate to them
 
 `Worlds::Start` and `Worlds::EndGrace` both wrap their transition in `ActiveRecord::Base.transaction { World.lock.find(id); ... }`. This matters because the recurring [Worlds::HousekeepingJob](../../app/jobs/worlds/housekeeping_job.rb) also calls these services as a safety net (in case `StartJob`/`EndGraceJob` was delayed or never ran), and a non-locked path could double-start a world.
 
-The early-return `return world unless world.proposed?` (and similar) makes the transition idempotent: if it's already happened, do nothing.
+The early-return `return world unless world.proposed?` (and similar) makes the transition idempotent: if it's already happened, do nothing. This also keeps the orphaned `Worlds::StartJob` enqueued at the original `t0_at` harmless after an admin force-start — it fires later, finds the world already in `grace`, and no-ops.
 
 ### Housekeeping safety net
 

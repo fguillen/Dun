@@ -71,7 +71,7 @@ tags:
   - name: Player worlds
     description: Player-facing world listing, join, and map/region/ruin reads.
   - name: Admin worlds
-    description: Admin propose/configure/cancel for worlds on administered servers.
+    description: Admin propose/configure/cancel/force-start for worlds on administered servers.
   - name: Admin world invitations
     description: Informational invitations attached to a world; do NOT gate admission (server access still rules).
   - name: Player kingdoms
@@ -1563,6 +1563,32 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422":
           description: "`world_not_cancellable` when the world has started."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /admin/worlds/{id}/start:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      operationId: startWorld
+      tags: [Admin worlds]
+      summary: Force-start a proposed world
+      description: >
+        Transitions a proposed world directly to `grace`, bypassing both the `t0_at`
+        wait and the `min_players` threshold. Anchors `t0_at` and `grace_closes_at`
+        to the moment of the call. Players can still join during the 72h grace window.
+      security: [{ adminBearer: [] }]
+      responses:
+        "200":
+          description: World force-started; now in `grace`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminWorld" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`world_not_startable` when the world is not in `proposed` status."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }

@@ -86,7 +86,10 @@ Rails.application.routes.draw do
       end
 
       resources :worlds, only: %i[show update] do
-        member { post :cancel }
+        member do
+          post :cancel
+          post :start
+        end
         scope module: :worlds do
           resources :invitations, only: %i[index create destroy]
           resources :battles,     only: %i[index]

@@ -80,6 +80,51 @@ module Api
         assert_equal "world_not_cancellable", response.parsed_body.dig("error", "code")
       end
 
+      test "POST /v1/admin/worlds/:id/start force-starts a proposed world" do
+        admin = create(:admin)
+        server = create(:server, owner: admin)
+        world = create(:world,
+                       server: server,
+                       min_players: 24,
+                       t0_at: 7.days.from_now)
+        authenticate_as_admin(admin)
+        MapGeneration::Generate.stubs(:call)
+
+        post "/v1/admin/worlds/#{world.id}/start", headers: auth_headers, as: :json
+        assert_response :success
+        assert_equal "grace", response.parsed_body["status"]
+        assert_not_nil response.parsed_body["grace_closes_at"]
+      end
+
+      test "POST /v1/admin/worlds/:id/start returns 404 for a non-administering admin" do
+        admin = create(:admin)
+        other_world = create(:world)
+        authenticate_as_admin(admin)
+
+        post "/v1/admin/worlds/#{other_world.id}/start", headers: auth_headers, as: :json
+        assert_response :not_found
+      end
+
+      test "POST /v1/admin/worlds/:id/start returns 422 on a non-proposed world" do
+        admin = create(:admin)
+        server = create(:server, owner: admin)
+        world = create(:world, :active, server: server)
+        authenticate_as_admin(admin)
+
+        post "/v1/admin/worlds/#{world.id}/start", headers: auth_headers, as: :json
+        assert_response :unprocessable_entity
+        assert_equal "world_not_startable", response.parsed_body.dig("error", "code")
+      end
+
+      test "POST /v1/admin/worlds/:id/start rejects a player-scope ApiKey" do
+        player = create(:player)
+        world = create(:world)
+        authenticate_as_player(player)
+
+        post "/v1/admin/worlds/#{world.id}/start", headers: auth_headers, as: :json
+        assert_response :unauthorized
+      end
+
       test "PATCH rejects a player-scope ApiKey" do
         player = create(:player)
         world = create(:world)

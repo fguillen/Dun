@@ -385,7 +385,7 @@ Returns past and present worlds (any status).
 
 See [openapi.yaml](openapi.yaml) — `proposeWorld`, `listAdminWorlds`.
 
-### 2.8 Edit or cancel a proposed world
+### 2.8 Edit, cancel, or force-start a proposed world
 
 While the world is still `proposed` you can adjust `name`, `t0_at`, `min_players`, and `auto_cancel_after_hours`. Once it transitions past `proposed`, the configuration is frozen.
 
@@ -409,7 +409,18 @@ curl -X POST http://localhost:3000/v1/admin/worlds/01HW.../cancel \
 
 `200 OK` — world transitions to `cancelled` (terminal). Cancelling anything past `proposed` returns `422 world_not_cancellable`. An idle `proposed` world also self-cancels automatically `auto_cancel_after_hours` after creation.
 
-See [openapi.yaml](openapi.yaml) — `configureWorld`, `cancelWorld`.
+**Force-start a world without waiting.** If you don't want a world to sit in `proposed` until `t0_at` and `min_players` are both met — useful for demos, dev/test, or recovery — admins can transition it straight to `grace`:
+
+```bash
+curl -X POST http://localhost:3000/v1/admin/worlds/01HW.../start \
+  -H 'Authorization: Bearer k_live_abc123...'
+```
+
+`200 OK` — world transitions to `grace`. The call bypasses both gates: `t0_at` doesn't have to have arrived, and the join count doesn't have to reach `min_players` (an empty world with zero kingdoms is allowed). The backend anchors `t0_at` and `grace_closes_at` to the moment of the call, so the 72h late-join window opens immediately and players can still join during it ([§3.5](#35-join-a-world)).
+
+Starting a world that isn't `proposed` returns `422 world_not_startable`.
+
+See [openapi.yaml](openapi.yaml) — `configureWorld`, `cancelWorld`, `startWorld`.
 
 ### 2.9 World-level invitations (optional)
 
@@ -447,13 +458,13 @@ See [openapi.yaml](openapi.yaml) — `createWorldInvitation`, `listWorldInvitati
 
 ### 2.10 Watch a world go live
 
-There's no `start` endpoint — worlds transition autonomously based on time and player count. The lifecycle:
+Worlds transition autonomously based on time and player count; an admin can also force the transition out of `proposed` via [§2.8](#28-edit-cancel-or-force-start-a-proposed-world). The lifecycle:
 
 1. **`proposed`** — created via [§2.7](#27-propose-a-new-world). Joinable.
 2. **`grace`** — when `t0_at` is reached *and* `joined_count >= min_players`, the world auto-starts: map is generated from `seed`, spawn regions are assigned to anyone who joined during `proposed`, the 72-hour late-join window opens. `grace_closes_at` is now set.
 3. **`active`** — when `grace_closes_at` passes. Late-join is closed; full game mechanics (combat, raids, Wonders) are live.
 4. **`archived`** — terminal. Triggered when a Wonder survives Consecration. World is read-only; `archived_at` is set.
-5. **`cancelled`** — terminal. Triggered by [§2.8](#28-edit-or-cancel-a-proposed-world) or by `auto_cancel_after_hours` elapsing while still empty.
+5. **`cancelled`** — terminal. Triggered by [§2.8](#28-edit-cancel-or-force-start-a-proposed-world) or by `auto_cancel_after_hours` elapsing while still empty.
 
 If T0 fires but `joined_count < min_players`, the world stays `proposed` and re-checks each tick.
 
@@ -507,7 +518,7 @@ curl -X DELETE http://localhost:3000/v1/admin/servers/01HX... \
 
 **When not to do this.**
 
-- **A round is active.** Players will lose in-progress kingdoms with no archive. Wait for round end, or cancel the world first ([§2.8](#28-edit-or-cancel-a-proposed-world)).
+- **A round is active.** Players will lose in-progress kingdoms with no archive. Wait for round end, or cancel the world first ([§2.8](#28-edit-cancel-or-force-start-a-proposed-world)).
 - **You only want to slow new joins.** Reduce `max_concurrent_worlds` or stop creating worlds — deletion is a sledgehammer.
 - **You only want to remove yourself.** Revoke your own adminship ([§2.5](#25-invite-co-admins)) instead, after adding a co-admin so the last-admin guard doesn't block you.
 

@@ -21,6 +21,14 @@ module Api
         render_error(code: "world_not_cancellable", message: e.message, status: :unprocessable_entity)
       end
 
+      def start
+        world = administered_world
+        ::Worlds::ForceStart.call(world)
+        render json: self.class.serialize(world.reload)
+      rescue ::Worlds::ForceStart::WorldNotForceStartable => e
+        render_error(code: "world_not_startable", message: e.message, status: :unprocessable_entity)
+      end
+
       def self.serialize(world)
         {
           id: world.id,
