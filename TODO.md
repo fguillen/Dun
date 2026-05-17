@@ -532,3 +532,7 @@ Implements `§17.5` runtime/ops surface.
 - Specialized units, Heroes, Quests, additional cosmetics (`§19`)
 - Managed hosting / SaaS surface (`§17.5`, `§18.1`)
 - Multi-tenant infra (single-tenant per server is the v1 commitment)
+
+## Small
+
+- [ ] The player API today has no "list worlds on this server" endpoint
