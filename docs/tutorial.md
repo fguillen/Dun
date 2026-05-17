@@ -873,7 +873,7 @@ curl -X DELETE http://localhost:3000/v1/kingdoms/01HK.../build/01HB... \
 
 `200 OK`. Refunds 75% of resources (floored). Elapsed time is lost; the build slot frees immediately.
 
-**Why upgrade the Warehouse early.** Stockpile cap scales quadratically with Warehouse level (roughly 1M per resource at L20). Hitting the cap means production silently caps out — visible by comparing `production_rate` to actual stockpile growth in successive dashboard reads.
+**Why upgrade the Warehouse early.** Stockpile cap scales quadratically with Warehouse level (roughly 1M per resource at L20). Hitting the cap means production silently caps out — visible by comparing `production_rates` (units per hour, per resource) to actual stockpile growth in successive dashboard reads.
 
 See [openapi.yaml](openapi.yaml) — `showKingdom`, `previewBuildUpgrade`, `queueBuildOrder`, `cancelBuildOrder`.
 
