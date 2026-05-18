@@ -1567,7 +1567,7 @@ paths:
 
   # ─── Admin worlds ───────────────────────────────────────────────────────────
 
-  /admin/servers/{server_id}/worlds:
+  /admin/servers/{serverId}/worlds:
     parameters:
       - $ref: "#/components/parameters/PathServerId"
     get:
