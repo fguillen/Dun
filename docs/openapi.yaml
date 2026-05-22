@@ -3020,9 +3020,9 @@ components:
         kingdom_id: { type: string }
         buildings:
           type: array
-          items: { $ref: "#/components/schemas/TrainingCatalogBuilding" }
+          items: { $ref: "#/components/schemas/TrainingCatalogEntry" }
 
-    TrainingCatalogBuilding:
+    TrainingCatalogEntry:
       type: object
       required: [building_kind, building_built, building_level, units]
       properties:
