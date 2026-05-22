@@ -51,7 +51,7 @@ All routes mount under `/v1/...`. The player surface is at the root of that name
 
 `retry_after` is included only on rate-limit (`429`) responses. Every response also echoes `X-Request-Id` (auto-generated if absent), which appears in lograge JSON logs and OpenTelemetry traces.
 
-The full request/response surface is captured in [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.1). When adding or changing endpoints, update that file in the same commit.
+The full request/response surface is captured in [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.1). When adding or changing endpoints, update that file in the same commit and bump its `info.version` following semver — **patch** for fixes or clarifications, **minor** for additive endpoints or fields, **major** for breaking changes.
 
 ### Base controllers
 
