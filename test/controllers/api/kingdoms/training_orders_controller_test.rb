@@ -186,6 +186,82 @@ module Api
           headers: auth_headers
         assert_response :not_found
       end
+
+      test "GET catalog without building returns all three military buildings" do
+        get "/v1/kingdoms/#{@kingdom.id}/train/catalog", headers: auth_headers
+        assert_response :success
+        body = response.parsed_body
+        assert_equal @kingdom.id.to_s, body["kingdom_id"]
+        assert_equal %w[barracks stable siege_workshop],
+          body["buildings"].map { |b| b["building_kind"] }
+      end
+
+      test "GET catalog with building filter returns only that building" do
+        get "/v1/kingdoms/#{@kingdom.id}/train/catalog",
+          params: { building: "barracks" }, headers: auth_headers
+        assert_response :success
+        body = response.parsed_body
+        assert_equal 1, body["buildings"].length
+        building = body["buildings"].first
+        assert_equal "barracks", building["building_kind"]
+        assert_equal %w[levy archer pikeman], building["units"].map { |u| u["unit"] }
+      end
+
+      test "GET catalog unit entry matches train/preview at count 1" do
+        get "/v1/kingdoms/#{@kingdom.id}/train/catalog",
+          params: { building: "barracks" }, headers: auth_headers
+        catalog_unit = response.parsed_body["buildings"].first["units"]
+          .find { |u| u["unit"] == "levy" }
+
+        get "/v1/kingdoms/#{@kingdom.id}/train/preview",
+          params: { building: "barracks", unit: "levy", count: 1 },
+          headers: auth_headers
+        preview = response.parsed_body
+
+        assert_equal preview["per_unit_cost"], catalog_unit["per_unit_cost"]
+        assert_equal preview["per_unit_seconds"], catalog_unit["per_unit_seconds"]
+        assert_equal preview["max_affordable_count"], catalog_unit["max_affordable_count"]
+      end
+
+      test "GET catalog marks units trainable for a built building" do
+        get "/v1/kingdoms/#{@kingdom.id}/train/catalog",
+          params: { building: "barracks" }, headers: auth_headers
+        building = response.parsed_body["buildings"].first
+        assert_equal true, building["building_built"]
+        assert building["units"].all? { |u| u["trainable"] }
+      end
+
+      test "GET catalog marks units not trainable for an unbuilt building" do
+        get "/v1/kingdoms/#{@kingdom.id}/train/catalog",
+          params: { building: "siege_workshop" }, headers: auth_headers
+        building = response.parsed_body["buildings"].first
+        assert_equal false, building["building_built"]
+        assert building["units"].none? { |u| u["trainable"] }
+      end
+
+      test "GET catalog returns 422 for invalid building kind" do
+        get "/v1/kingdoms/#{@kingdom.id}/train/catalog",
+          params: { building: "warehouse" }, headers: auth_headers
+        assert_response :unprocessable_entity
+        assert_equal "invalid_building_kind", response.parsed_body.dig("error", "code")
+      end
+
+      test "GET catalog returns 404 for non-owner" do
+        stranger = create(:player)
+        authenticate_as_player(stranger)
+        get "/v1/kingdoms/#{@kingdom.id}/train/catalog", headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET catalog returns 404 for unknown kingdom" do
+        get "/v1/kingdoms/does-not-exist/train/catalog", headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET catalog returns 401 without auth" do
+        get "/v1/kingdoms/#{@kingdom.id}/train/catalog"
+        assert_response :unauthorized
+      end
     end
   end
 end

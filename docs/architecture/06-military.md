@@ -81,6 +81,14 @@ time_per_unit(unit, building_level) = base_train_time × (0.95)^(level - 1)
 
 `Training::ResolveCompletions` runs first so `building_level` (which feeds the time discount) reflects any ripe training. The same informational-only stance applies as in the building preview: the preview reports cost even when the world is not buildable or the kingdom is eliminated, and the POST is what enforces.
 
+### Training catalog
+
+`GET /v1/kingdoms/:id/train/catalog?building=` is served by [Api::Kingdoms::TrainingOrdersController#catalog](../../app/controllers/api/kingdoms/training_orders_controller.rb) and delegates to [Training::Catalog](../../app/services/training/catalog.rb). It answers "what can I train here, and what does it cost?" without the caller needing to know unit names up front — the gap `train/preview` leaves, since that endpoint requires `building`, `unit`, **and** `count`.
+
+The `building` query param is **optional**: given (`barracks|stable|siege_workshop`) it returns that one building; omitted, it returns all three. An invalid value is `422 invalid_building_kind`.
+
+`Training::Catalog` is a thin vectorization of `Training::Preview`: for each in-scope building it iterates that building's units from `Units::Catalog::TRAINS_AT` and calls `Training::Preview.call(..., count: 1)` per unit, so each `TrainingCatalogUnit` (`per_unit_cost`, `per_unit_seconds`, `max_affordable_count`) is byte-for-byte what `train/preview` returns for that `(building, unit, count: 1)` — no second cost/time code path. `trainable` is `building_built && unit_trainable_here` (advisory). `Training::ResolveCompletions` runs first, same as `preview`.
+
 ### Where do trained units go?
 
 [Training::Complete](../../app/services/training/complete.rb#L37) merges the new units into a special `"Garrison"` army for that kingdom:

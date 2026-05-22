@@ -55,6 +55,19 @@ module Api
         render_error(code: "invalid_count", message: e.message, status: :unprocessable_entity)
       end
 
+      def catalog
+        kingdom = load_kingdom
+
+        Training::ResolveCompletions.call(kingdom)
+        kingdom.reload
+
+        render json: Training::Catalog.call(
+          kingdom: kingdom, building_kind: params[:building].presence
+        )
+      rescue Training::Catalog::InvalidBuildingKind => e
+        render_error(code: "invalid_building_kind", message: e.message, status: :unprocessable_entity)
+      end
+
       def self.serialize(order)
         {
           id: order.id,

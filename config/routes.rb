@@ -49,7 +49,10 @@ Rails.application.routes.draw do
           collection { get :preview }
         end
         resources :training_orders, only: %i[create destroy], path: "train" do
-          collection { get :preview }
+          collection do
+            get :preview
+            get :catalog
+          end
         end
         resources :buildings,       only: %i[index]
         resources :armies,          only: %i[index]
