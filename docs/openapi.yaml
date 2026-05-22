@@ -2281,22 +2281,14 @@ components:
             code:
               type: string
               description: |
-                Stable code. Known values:
-                `unauthorized`, `invalid_token`, `expired`,
-                `already_consumed`, `forbidden`, `not_found`,
-                `last_admin`, `handle_locked`, `invalid`,
-                `param_missing`.
-              enum:
-                - unauthorized
-                - invalid_token
-                - expired
-                - already_consumed
-                - forbidden
-                - not_found
-                - last_admin
-                - handle_locked
-                - invalid
-                - param_missing
+                Stable, machine-readable error code. This list is non-exhaustive
+                and grows as the API evolves — clients MUST treat an unrecognized
+                code as a generic failure (fall back to `message`) rather than
+                failing to decode the response. Common cross-cutting values:
+                `unauthorized`, `invalid_token`, `expired`, `already_consumed`,
+                `forbidden`, `not_found`, `invalid`, `param_missing`. Endpoint-
+                specific domain codes (e.g. `world_not_joinable`,
+                `insufficient_resources`) are also returned.
             message: { type: string }
             retry_after:
               type: integer
