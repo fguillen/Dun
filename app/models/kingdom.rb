@@ -33,6 +33,19 @@ class Kingdom < ApplicationRecord
     home_region_id.nil?
   end
 
+  # Player-facing display name; "[unknown]" guards a profile with a nil handle.
+  def handle
+    player_profile&.handle.presence || "[unknown]"
+  end
+
+  # Batch ULID -> handle resolution; avoids N+1 across map / node / roster lists.
+  def self.handles_for(kingdom_ids)
+    ids = Array(kingdom_ids).compact.uniq
+    return {} if ids.empty?
+
+    includes(:player_profile).where(id: ids).each_with_object({}) { |k, h| h[k.id] = k.handle }
+  end
+
   private
 
   def set_joined_at

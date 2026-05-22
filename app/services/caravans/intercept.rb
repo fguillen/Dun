@@ -74,7 +74,7 @@ module Caravans
       now = Time.current
       caravan.update!(status: "intercepted", intercepted_at: now)
 
-      attacker_handle = handle_for(@hostile.kingdom)
+      attacker_handle = @hostile.kingdom.handle
       TradeLedger::Record.call(caravan: caravan, status: "intercepted", attacker_handle: attacker_handle)
 
       ActiveSupport::Notifications.instrument(
@@ -111,10 +111,6 @@ module Caravans
       end
 
       composition.sum { |unit, count| Units::Catalog.capacity_for(unit) * count.to_i }
-    end
-
-    def handle_for(kingdom)
-      kingdom.player_profile&.handle.presence || "[unknown]"
     end
   end
 end

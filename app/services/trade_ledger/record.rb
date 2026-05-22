@@ -30,8 +30,8 @@ module TradeLedger
     private
 
     def create_entries
-      sender_handle   = handle_for(@caravan.sender_kingdom)
-      receiver_handle = handle_for(@caravan.receiver_kingdom)
+      sender_handle   = @caravan.sender_kingdom.handle
+      receiver_handle = @caravan.receiver_kingdom.handle
       now = Time.current
 
       Kingdom::RESOURCES.each_with_object([]) do |resource, rows|
@@ -61,10 +61,6 @@ module TradeLedger
         )
       end
       entries
-    end
-
-    def handle_for(kingdom)
-      kingdom.player_profile&.handle.presence || "[unknown]"
     end
   end
 end

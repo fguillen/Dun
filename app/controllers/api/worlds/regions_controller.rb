@@ -34,6 +34,8 @@ module Api
       end
 
       def serialize(region)
+        handle_map = Kingdom.handles_for(region.nodes.map(&:owner_kingdom_id))
+        owner_id = region.nodes.find { |n| n.is_home_hoard }&.owner_kingdom_id
         {
           id: region.id,
           name: region.name,
@@ -49,7 +51,8 @@ module Api
               tier: n.tier,
               base_rate: n.base_rate,
               is_home_hoard: n.is_home_hoard,
-              owner_kingdom_id: n.owner_kingdom_id
+              owner_kingdom_id: n.owner_kingdom_id,
+              owner_handle: n.owner_kingdom_id && handle_map[n.owner_kingdom_id]
             }
           },
           ruin: region.ruin && {
@@ -58,7 +61,8 @@ module Api
             claimed: region.ruin.claimed?,
             claimed_by_kingdom_id: region.ruin.claimed_by_kingdom_id
           },
-          owner_kingdom_id: region.nodes.find { |n| n.is_home_hoard }&.owner_kingdom_id
+          owner_kingdom_id: owner_id,
+          owner_handle: owner_id && handle_map[owner_id]
         }
       end
 

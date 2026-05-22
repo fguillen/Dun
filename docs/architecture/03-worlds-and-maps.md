@@ -270,10 +270,13 @@ Late joiners after this point are rejected by [Worlds::Join](../../app/services/
 |---|---|
 | `GET /v1/servers/:id/worlds` | List every world on a server you belong to (lean — no `my_kingdom`, no counts), ordered `t0_at` desc; 404 to non-members |
 | `GET /v1/worlds/:id` | World summary: status, region count, kingdom count, your kingdom summary |
-| `GET /v1/worlds/:id/map` | Full map: regions + adjacencies. Large but cacheable. |
-| `GET /v1/worlds/:id/regions/:region_id` | One region's detail |
+| `GET /v1/worlds/:id/map` | Full map: regions + adjacencies, each region carrying `owner_kingdom_id`/`owner_handle`. Large but cacheable. |
+| `GET /v1/worlds/:id/regions/:region_id` | One region's detail; region and each node carry `owner_kingdom_id`/`owner_handle` |
 | `GET /v1/worlds/:id/regions/:region_id/adjacent` | Adjacent region IDs |
 | `GET /v1/worlds/:id/ruins` | All ruins, claimed and unclaimed |
+| `GET /v1/worlds/:id/kingdoms` | Public roster: every kingdom with handle, home region, territory counts, Wonder summary, and cross-round title |
+
+A region's owner is the kingdom holding its **home-hoard node** — the same derivation in `MapController` and `RegionsController`. `owner_handle` resolves the owning kingdom's player handle (the CLI never renders raw ULIDs); `Kingdom.handles_for` batch-loads handles to keep these list endpoints free of N+1 queries. Per [§16.9](../dun%20Game%20Design%20Document.v3.md) this is always-visible intel — coarse by design, so scouting (v1.1) still has detail to uncover.
 
 Admin endpoints for world configuration are listed in [api-endpoints.md](api-endpoints.md).
 

@@ -39,6 +39,7 @@ Rails.application.routes.draw do
         resources :ruins, only: %i[index]
         resources :nodes, only: %i[index show]
         resources :wonders, only: %i[index]
+        resources :kingdoms, only: %i[index]
       end
     end
 

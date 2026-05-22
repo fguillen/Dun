@@ -3,12 +3,13 @@ module Api
     class NodesController < Api::BaseController
       def index
         nodes = world.nodes.includes(:region).order("regions.name")
-        render json: { nodes: nodes.map { |n| serialize(n) } }
+        handle_map = Kingdom.handles_for(nodes.map(&:owner_kingdom_id))
+        render json: { nodes: nodes.map { |n| serialize(n, handle_map) } }
       end
 
       def show
         node = world.nodes.includes(:region).find(params[:id])
-        render json: { node: serialize(node) }
+        render json: { node: serialize(node, Kingdom.handles_for([node.owner_kingdom_id])) }
       end
 
       private
@@ -21,7 +22,7 @@ module Api
         end
       end
 
-      def serialize(node)
+      def serialize(node, handle_map)
         {
           id: node.id,
           region_id: node.region_id,
@@ -31,6 +32,7 @@ module Api
           base_rate: node.base_rate,
           is_home_hoard: node.is_home_hoard,
           owner_kingdom_id: node.owner_kingdom_id,
+          owner_handle: node.owner_kingdom_id && handle_map[node.owner_kingdom_id],
           garrison: node.garrison
         }
       end
