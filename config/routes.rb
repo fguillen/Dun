@@ -16,6 +16,7 @@ Rails.application.routes.draw do
     resources :servers, only: %i[index] do
       member do
         post  :join
+        get   "me" => "servers/me#show"
         patch "me" => "servers/me#update"
         get   "hall-of-fame" => "servers/hall_of_fame#show"
       end

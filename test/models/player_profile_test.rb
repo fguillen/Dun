@@ -27,20 +27,20 @@ class PlayerProfileTest < ActiveSupport::TestCase
     end
   end
 
-  test "handle must start with a letter" do
-    profile = build(:player_profile, server: @server, player: @player, handle: "1bad")
-    assert_not profile.valid?
+  test "handle may start with a digit" do
+    profile = build(:player_profile, server: @server, player: @player, handle: "1Fist")
+    assert profile.valid?, profile.errors.full_messages.join(", ")
   end
 
-  test "handle rejects leading, trailing, or consecutive spaces" do
-    [ " Lead", "Trail ", "Double  Space" ].each do |bad|
+  test "handle rejects spaces" do
+    [ "Iron Fist", " Lead", "Trail ", "Double  Space" ].each do |bad|
       profile = build(:player_profile, server: @server, player: @player, handle: bad)
       assert_not profile.valid?, "expected #{bad.inspect} to be invalid"
     end
   end
 
-  test "handle accepts single internal spaces, underscores, digits" do
-    profile = build(:player_profile, server: @server, player: @player, handle: "Iron Fist_42")
+  test "handle accepts letters, digits, underscores, and hyphens" do
+    profile = build(:player_profile, server: @server, player: @player, handle: "Iron-Fist_42")
     assert profile.valid?, profile.errors.full_messages.join(", ")
   end
 
@@ -68,10 +68,12 @@ class PlayerProfileTest < ActiveSupport::TestCase
     assert profile.valid?
   end
 
-  test "handle length 3..20" do
+  test "handle length 3..24" do
     profile = build(:player_profile, server: @server, player: @player, handle: "ab")
     assert_not profile.valid?
-    profile.handle = "a" * 21
+    profile.handle = "a" * 24
+    assert profile.valid?, profile.errors.full_messages.join(", ")
+    profile.handle = "a" * 25
     assert_not profile.valid?
   end
 

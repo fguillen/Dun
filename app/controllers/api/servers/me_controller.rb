@@ -1,6 +1,16 @@
 module Api
   module Servers
     class MeController < Api::BaseController
+      def show
+        server_id = params[:id] || params[:server_id]
+        profile = PlayerProfile.find_by(server_id: server_id, player: Current.player)
+
+        return render_error(code: "not_found", message: "You have not joined this server", status: :not_found) unless profile
+        return render_error(code: "handle_not_set", message: "You haven't set a handle on this server yet.", status: :not_found) if profile.handle.blank?
+
+        render json: serialize_read(profile)
+      end
+
       def update
         server_id = params[:id] || params[:server_id]
         profile = PlayerProfile.find_by!(server_id: server_id, player: Current.player)
@@ -24,6 +34,12 @@ module Api
           stats: profile.stats&.to_counters || {},
           title: ::Titles::Render.call(profile)
         }
+      end
+
+      # PlayerProfileRead shape — mirrors Api::Servers::PlayersController#serialize
+      # (the showPlayerProfile response), adding joined_at.
+      def serialize_read(profile)
+        serialize(profile).merge(joined_at: profile.created_at.iso8601)
       end
     end
   end

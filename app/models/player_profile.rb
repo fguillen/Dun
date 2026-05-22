@@ -1,6 +1,5 @@
 class PlayerProfile < ApplicationRecord
-  HANDLE_FORMAT = /\A[A-Za-z][A-Za-z0-9_]*(?: [A-Za-z0-9_]+)*\z/
-  HANDLE_LENGTH = (3..20).freeze
+  HANDLE_FORMAT = /\A[A-Za-z0-9_-]{3,24}\z/
   REAL_NAME_LENGTH = (1..60).freeze
   RESERVED_HANDLES = %w[admin system dun world neutral wilderness server anonymous none null].freeze
 
@@ -14,8 +13,7 @@ class PlayerProfile < ApplicationRecord
 
   validates :player_id, uniqueness: { scope: :server_id }
   validates :handle,
-            length: { in: HANDLE_LENGTH, allow_nil: true },
-            format: { with: HANDLE_FORMAT, allow_nil: true, message: "must start with a letter; letters, digits, underscore, and single internal spaces only" },
+            format: { with: HANDLE_FORMAT, allow_nil: true, message: "must be 3–24 characters: letters, digits, underscore, and hyphen only" },
             uniqueness: { scope: :server_id, case_sensitive: false, allow_nil: true }
   validate :handle_not_reserved
   validates :real_name, length: { in: REAL_NAME_LENGTH, allow_nil: true }

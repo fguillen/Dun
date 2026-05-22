@@ -45,6 +45,49 @@ module Api
         patch "/v1/servers/#{@server.id}/me", params: { handle: "X" }, headers: auth_headers, as: :json
         assert_response :unauthorized
       end
+
+      test "GET returns the caller's own profile" do
+        @profile.update!(handle: "IronFist", real_name: "Alice Example")
+
+        get "/v1/servers/#{@server.id}/me", headers: auth_headers
+
+        assert_response :success
+        body = response.parsed_body
+        assert_equal "IronFist", body["handle"]
+        assert_equal "Alice Example", body["real_name"]
+        assert body.key?("stats"), "expected stats in the response"
+        assert body.key?("title"), "expected title in the response"
+        assert body["joined_at"].present?, "expected joined_at in the response"
+      end
+
+      test "GET 404s with handle_not_set when no handle has been chosen" do
+        get "/v1/servers/#{@server.id}/me", headers: auth_headers
+
+        assert_response :not_found
+        assert_equal "handle_not_set", response.parsed_body.dig("error", "code")
+      end
+
+      test "GET 404s with not_found when the player has no profile on this server" do
+        @profile.destroy!
+
+        get "/v1/servers/#{@server.id}/me", headers: auth_headers
+
+        assert_response :not_found
+        assert_equal "not_found", response.parsed_body.dig("error", "code")
+      end
+
+      test "GET 401s without authentication" do
+        get "/v1/servers/#{@server.id}/me"
+        assert_response :unauthorized
+      end
+
+      test "GET rejects an admin-scope key" do
+        admin = create(:admin)
+        authenticate_as_admin(admin)
+
+        get "/v1/servers/#{@server.id}/me", headers: auth_headers
+        assert_response :unauthorized
+      end
     end
   end
 end

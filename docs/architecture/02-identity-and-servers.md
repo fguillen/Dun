@@ -143,7 +143,7 @@ Admission is **not retroactive**. Changing access rules does not eject existing 
 | Field | Notes |
 |---|---|
 | `server_id`, `player_id` | unique together |
-| `handle` | optional, case-insensitive unique per server (citext), reserved-word list, format `^[A-Za-z][A-Za-z0-9_]*(?: [A-Za-z0-9_]+)*$`, 3–20 chars |
+| `handle` | optional, case-insensitive unique per server (citext), reserved-word list, format `^[A-Za-z0-9_-]{3,24}$`, 3–24 chars |
 | `real_name` | optional, 1–60 chars; visible to admins, hidden from other players (Phase 11 will surface admin-visible views) |
 | `stats` | jsonb; filled in by Phase 10 |
 

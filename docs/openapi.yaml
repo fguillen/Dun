@@ -317,6 +317,35 @@ paths:
   /servers/{id}/me:
     parameters:
       - $ref: "#/components/parameters/PathId"
+    get:
+      operationId: showOwnProfile
+      tags: [Player profile]
+      summary: Show the current player's profile for this server
+      description: |
+        Returns the authenticated player's own per-server profile — the
+        same `PlayerProfileRead` shape as `showPlayerProfile`, including
+        `joined_at`.
+
+        A `404` is returned when the caller has joined the server but not
+        yet chosen a handle (`handle_not_set`) — a `PlayerProfileRead`
+        cannot be formed without one — or when the caller has no profile
+        on this server at all (`not_found`).
+      security: [{ playerBearer: [] }]
+      responses:
+        "200":
+          description: Profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlayerProfileRead" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: No handle set yet, or no profile on this server.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+              examples:
+                handle_not_set: { value: { error: { code: handle_not_set, message: "You haven't set a handle on this server yet." } } }
+                not_found:      { value: { error: { code: not_found,      message: "You have not joined this server" } } }
     patch:
       operationId: updateOwnProfile
       tags: [Player profile]
@@ -325,10 +354,10 @@ paths:
         Updates the current player's per-server profile.
 
         `handle` rules (§17.1):
-        - Length 3–20.
-        - Must start with a letter.
-        - Allowed characters: `a-zA-Z0-9_` plus single internal spaces.
-        - No leading, trailing, or consecutive spaces.
+        - 3–24 characters.
+        - Allowed characters: `A-Za-z`, `0-9`, `_`, `-` — regex
+          `^[A-Za-z0-9_-]{3,24}$`.
+        - No spaces.
         - Reserved (case-insensitive): `admin`, `system`, `dun`, `world`,
           `neutral`, `wilderness`, `server`, `anonymous`, `none`, `null`.
         - Case-preserved on display, case-insensitive for uniqueness
@@ -345,7 +374,7 @@ paths:
             schema:
               type: object
               properties:
-                handle:    { type: string, minLength: 3, maxLength: 20, example: IronFist }
+                handle:    { type: string, pattern: '^[A-Za-z0-9_-]{3,24}$', minLength: 3, maxLength: 24, example: IronFist }
                 real_name: { type: string, minLength: 1, maxLength: 60, example: "Alice Example" }
       responses:
         "200":
@@ -2302,6 +2331,7 @@ components:
 
                 **Server membership**
                 - `handle_locked` — player handle cannot be changed during an active round
+                - `handle_not_set` — player has joined the server but not yet chosen a handle
                 - `last_admin` — cannot remove the only remaining server admin
 
                 **World lifecycle (admin)**
