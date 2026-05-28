@@ -3,7 +3,7 @@ module Api
     class ArmiesController < Api::BaseController
       def index
         kingdom = load_kingdom
-        armies = kingdom.armies.order(:created_at)
+        armies = kingdom.armies.includes(:march_orders).order(:created_at)
         render json: { armies: armies.map { |a| Api::ArmiesController.serialize(a) } }
       end
 

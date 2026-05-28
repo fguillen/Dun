@@ -89,7 +89,24 @@ module Api
         status: army.status,
         location_region_id: army.location_region_id,
         composition: army.composition,
-        total_capacity: army.total_capacity
+        total_capacity: army.total_capacity,
+        active_march: serialize_active_march(army)
+      }
+    end
+
+    # Embedded so clients can render a march ETA; there is no GET endpoint for marches. Null unless the army is in flight.
+    def self.serialize_active_march(army)
+      return nil unless army.status.in?(%w[marching returning])
+
+      order = army.march_orders.detect(&:active?)
+      return nil if order.nil?
+
+      {
+        march_order_id: order.id,
+        intent: order.intent,
+        target_region_id: order.target_region_id,
+        arrives_at: order.arrives_at&.iso8601,
+        dispatched_at: order.dispatched_at&.iso8601
       }
     end
 

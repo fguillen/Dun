@@ -39,6 +39,44 @@ module Api
       assert_response :not_found
     end
 
+    test "GET show active_march is null for a home army" do
+      get "/v1/armies/#{@garrison.id}", headers: auth_headers
+      assert_response :success
+      assert_nil response.parsed_body["active_march"]
+    end
+
+    test "GET show embeds active_march while the army is marching" do
+      marcher = create(:army, :marching,
+        kingdom: @kingdom, location_region: @kingdom.home_region, name: "Vanguard")
+      order = create(:march_order, army: marcher,
+        origin_region: @kingdom.home_region, target_region: @neighbor,
+        intent: "attack", arrives_at: 1.hour.from_now)
+
+      get "/v1/armies/#{marcher.id}", headers: auth_headers
+      assert_response :success
+      am = response.parsed_body["active_march"]
+      assert_equal order.id, am["march_order_id"]
+      assert_equal "attack", am["intent"]
+      assert_equal @neighbor.id, am["target_region_id"]
+      assert_not_nil am["arrives_at"]
+      assert_not_nil am["dispatched_at"]
+    end
+
+    test "GET show embeds active_march for a returning caravan escort" do
+      escort = create(:army, :returning,
+        kingdom: @kingdom, location_region: @neighbor, name: "Caravan 1")
+      create(:march_order, army: escort,
+        origin_region: @neighbor, target_region: @kingdom.home_region,
+        intent: "caravan_return", arrives_at: 2.hours.from_now)
+
+      get "/v1/armies/#{escort.id}", headers: auth_headers
+      assert_response :success
+      am = response.parsed_body["active_march"]
+      assert_equal "caravan_return", am["intent"]
+      assert_equal @kingdom.home_region.id, am["target_region_id"]
+      assert_not_nil am["arrives_at"]
+    end
+
     test "POST split creates a new army and shrinks the source" do
       post "/v1/armies/#{@garrison.id}/split",
         params: { units: { "levy" => 4, "knight" => 2 }, name: "Strike Force" },

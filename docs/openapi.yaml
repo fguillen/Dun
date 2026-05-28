@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: dun HTTP API
-  version: "1.1.0"
+  version: "1.2.0"
   description: |
     JSON API for the `dun` backend. The CLI gem and any future integration
     consume only this surface.
@@ -3166,6 +3166,25 @@ components:
         location_region_id: { type: string }
         composition: { $ref: "#/components/schemas/Composition" }
         total_capacity: { type: integer }
+        active_march:
+          nullable: true
+          description: >-
+            The army's in-flight march. Present when status is `marching` or
+            `returning` and an unresolved march order exists; null otherwise.
+            Lets clients render an arrival ETA (e.g. "arrives 2h 15m") without a
+            separate lookup, since there is no GET endpoint for marches.
+            `intent` is `caravan_return` for the homebound leg of a delivered
+            caravan's escort.
+          type: object
+          required: [intent, target_region_id, arrives_at]
+          properties:
+            march_order_id: { type: string }
+            intent:
+              type: string
+              enum: [attack, reinforce, scout, capture, claim_ruin, caravan, caravan_return]
+            target_region_id: { type: string }
+            arrives_at: { type: string, format: date-time }
+            dispatched_at: { type: string, format: date-time }
 
     MarchOrder:
       type: object
