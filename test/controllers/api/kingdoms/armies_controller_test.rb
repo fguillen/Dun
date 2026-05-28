@@ -58,6 +58,41 @@ module Api
         assert_equal target.id, vanguard.dig("active_march", "target_region_id")
         assert_not_nil vanguard.dig("active_march", "arrives_at")
       end
+
+      test "GET resolves a ripe march arrival on read" do
+        target = create(:region, world: @kingdom.world, name: "Front")
+        marcher = create(:army, :marching,
+          kingdom: @kingdom, location_region: @kingdom.home_region, name: "Vanguard",
+          composition: { "levy" => 5 })
+        order = create(:march_order, army: marcher,
+          origin_region: @kingdom.home_region, target_region: target,
+          intent: "reinforce", path: [ @kingdom.home_region.id, target.id ],
+          arrives_at: 1.minute.ago)
+
+        get "/v1/kingdoms/#{@kingdom.id}/armies", headers: auth_headers
+        assert_response :success
+
+        vanguard = response.parsed_body["armies"].find { |a| a["name"] == "Vanguard" }
+        assert_equal "home", vanguard["status"]
+        assert_nil vanguard["active_march"]
+        assert_not_nil order.reload.arrived_at
+      end
+
+      test "GET leaves a not-yet-ripe march marching" do
+        target = create(:region, world: @kingdom.world, name: "Front")
+        marcher = create(:army, :marching,
+          kingdom: @kingdom, location_region: @kingdom.home_region, name: "Vanguard")
+        create(:march_order, army: marcher,
+          origin_region: @kingdom.home_region, target_region: target,
+          intent: "reinforce", arrives_at: 1.hour.from_now)
+
+        get "/v1/kingdoms/#{@kingdom.id}/armies", headers: auth_headers
+        assert_response :success
+
+        vanguard = response.parsed_body["armies"].find { |a| a["name"] == "Vanguard" }
+        assert_equal "marching", vanguard["status"]
+        assert_not_nil vanguard["active_march"]
+      end
     end
   end
 end
