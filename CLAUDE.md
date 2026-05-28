@@ -51,7 +51,7 @@ All routes mount under `/v1/...`. The player surface is at the root of that name
 
 `retry_after` is included only on rate-limit (`429`) responses. Every response also echoes `X-Request-Id` (auto-generated if absent), which appears in lograge JSON logs and OpenTelemetry traces.
 
-The full request/response surface is captured in [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.1). When adding or changing endpoints, update that file in the same commit and bump its `info.version` following semver — **patch** for fixes or clarifications, **minor** for additive endpoints or fields, **major** for breaking changes.
+The full request/response surface is captured in [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.1). **Every edit to that file must bump `info.version` in the same commit — there is no version-neutral change.** This covers any edit: endpoint, schema, field, description, or example. Classify the bump by semver: **patch** for fixes or clarifications (wording, descriptions, examples), **minor** for additive endpoints or fields, **major** for breaking changes (removing or renaming fields, narrowing a type, changing a `required` set).
 
 ### Base controllers
 
@@ -84,6 +84,7 @@ Uses the `data_migrate` gem for data-only changes (separate from schema migratio
 
 - Tests: Always write controller/model tests that confirm the proper function of any added or changed feature. Tests must pass before the work is considered done.
 - Commit: Always create a git commit at the end of each task.
+- API contract: Every change to `docs/openapi.yaml` must bump its `info.version` (semver) in the same commit — see the version rule under "Routes & response shape".
 - Bug fix: Always write a test that reproduces the issue before fixing it.
 - Documentation: Always use context7 when you need code generation, setup, configuration steps, ruby gem documentation, or library/API documentation.
 - Ask the user: in case of doubts always ask the user for clarifications.
