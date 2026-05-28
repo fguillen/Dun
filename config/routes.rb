@@ -58,6 +58,7 @@ Rails.application.routes.draw do
         resources :buildings,       only: %i[index]
         resources :armies,          only: %i[index]
         resources :battles,         only: %i[index]
+        resources :events,          only: %i[index]
         resources :caravans,        only: %i[create]
         resource :wonder, only: %i[show create destroy] do
           post :repair
