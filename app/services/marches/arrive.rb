@@ -71,37 +71,40 @@ module Marches
       nil
     end
 
-    # Phase 7 — `capture` arrives at a region containing a Node. Wilderness
-    # nodes are fought through `Nodes::Capture` (vs static garrison); enemy-
-    # owned nodes route through `Nodes::Attack` (PvP at the region, or walk-in
-    # if undefended). If the army has no catapult (or the target has no node)
-    # the attacker parks `engaged` and emits an aborted notification.
+    # Phase 7 — `capture` arrives at a region containing a Node. `Nodes::Capture`
+    # fights the wilderness garrison or the owner's defending armies as needed and
+    # flips ownership on a win. These preconditions are normally rejected up front
+    # by `Marches::Dispatch`; this rescue is the in-transit backstop (state can
+    # change between dispatch and arrival) — the attacker parks and an aborted
+    # notification is emitted.
     def handle_capture(army, target, order)
       node = Node.where(region_id: target.id).first
       if node.nil?
-        ActiveSupport::Notifications.instrument(
-          "dun.node.capture_aborted",
-          world_id: army.kingdom.world_id,
-          region_id: target.id,
-          army_id: army.id,
-          reason: "no_node"
-        )
-        army.update!(status: "home", location_region_id: target.id)
+        abort_capture(army, target, reason: "no_node", status: "home")
         return nil
       end
 
-      service = node.wilderness? ? Nodes::Capture : Nodes::Attack
-      service.call(march_order: order, node: node)
-    rescue Nodes::Capture::CatapultRequired, Nodes::Attack::CatapultRequired
-      army.update!(status: "engaged", location_region_id: target.id)
+      Nodes::Capture.call(march_order: order, node: node)
+    rescue Nodes::Capture::CatapultRequired
+      abort_capture(army, target, reason: "catapult_required", status: "engaged")
+      nil
+    rescue Nodes::Capture::SelfCapture
+      abort_capture(army, target, reason: "self_capture", status: "home")
+      nil
+    rescue Nodes::Capture::HomeHoardProtected
+      abort_capture(army, target, reason: "home_hoard_protected", status: "home")
+      nil
+    end
+
+    def abort_capture(army, target, reason:, status:)
+      army.update!(status: status, location_region_id: target.id)
       ActiveSupport::Notifications.instrument(
         "dun.node.capture_aborted",
         world_id: army.kingdom.world_id,
         region_id: target.id,
         army_id: army.id,
-        reason: "catapult_required"
+        reason: reason
       )
-      nil
     end
 
     # Phase 7 — `claim_ruin` arrives at a region containing a Ruin. The ruin's

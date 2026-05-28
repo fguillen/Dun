@@ -64,5 +64,60 @@ module Marches
       assert_equal "reinforce", events.first[:intent]
       assert_equal @target.id, events.first[:target_region_id]
     end
+
+    # --- capture feasibility (rejected up front, synchronous error code) ---
+
+    test "rejects capture when the target region has no node" do
+      assert_raises(Dispatch::NoCapturableNode) do
+        Dispatch.call(army: @army, target_region: @target, intent: "capture")
+      end
+    end
+
+    test "rejects capture when the army has no catapult" do
+      create(:node, region: @target)
+      assert_raises(Dispatch::CatapultRequired) do
+        Dispatch.call(army: @army, target_region: @target, intent: "capture")
+      end
+    end
+
+    test "rejects capture of a node the kingdom already owns" do
+      create(:node, region: @target, owner_kingdom_id: @army.kingdom_id, garrison: {})
+      @army.update!(composition: { "knight" => 5, "catapult" => 1 })
+      assert_raises(Dispatch::SelfCapture) do
+        Dispatch.call(army: @army, target_region: @target, intent: "capture")
+      end
+    end
+
+    test "rejects capture of another kingdom's home-hoard" do
+      rival_home = create(:region, world: @world, name: "RivalHome")
+      create(:kingdom, world: @world, home_region: rival_home)
+      create(:node, region: rival_home, is_home_hoard: true)
+      @army.update!(composition: { "knight" => 5, "catapult" => 1 })
+      assert_raises(Dispatch::HomeHoardProtected) do
+        Dispatch.call(army: @army, target_region: rival_home, intent: "capture")
+      end
+    end
+
+    test "allows the home kingdom to dispatch capture against its own home-hoard" do
+      kingdom = create(:kingdom, world: @world, home_region: @target)
+      army = create(:army, kingdom: kingdom, location_region: @home, composition: { "knight" => 5, "catapult" => 1 })
+      create(:node, region: @target, is_home_hoard: true)
+
+      order = Dispatch.call(army: army, target_region: @target, intent: "capture")
+      assert_equal "capture", order.intent
+    end
+
+    # --- raid (attack) self-target ---
+
+    test "rejects attack (raid) on the kingdom's own home region" do
+      assert_raises(Dispatch::SelfAttack) do
+        Dispatch.call(army: @army, target_region: @home, intent: "attack")
+      end
+    end
+
+    test "allows attack (raid) on another region" do
+      order = Dispatch.call(army: @army, target_region: @target, intent: "attack")
+      assert_equal "attack", order.intent
+    end
   end
 end

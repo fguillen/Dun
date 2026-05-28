@@ -3,6 +3,11 @@ module Marches
     class NotHome < StandardError; end
     class WorldNotActive < StandardError; end
     class InvalidIntent < StandardError; end
+    class CatapultRequired < StandardError; end
+    class NoCapturableNode < StandardError; end
+    class SelfCapture < StandardError; end
+    class HomeHoardProtected < StandardError; end
+    class SelfAttack < StandardError; end
 
     DISPATCHABLE_WORLD_STATUSES = %w[grace active].freeze
 
@@ -24,6 +29,8 @@ module Marches
 
         kingdom = army.kingdom
         raise WorldNotActive, "world status #{kingdom.world.status} not dispatchable" unless DISPATCHABLE_WORLD_STATUSES.include?(kingdom.world.status)
+
+        validate_feasibility!(army, kingdom)
 
         plan = Marches::Plan.call(origin: army.location_region, destination: @target_region, army: army)
 
@@ -60,6 +67,31 @@ module Marches
 
         order
       end
+    end
+
+    private
+
+    # Reject marches that can never succeed, up front, so the caller gets a
+    # synchronous error code instead of discovering it on arrival. `capture`
+    # preconditions are deterministic at dispatch; the service re-checks them on
+    # arrival as a backstop for state that changes in transit.
+    def validate_feasibility!(army, kingdom)
+      case @intent
+      when "capture"
+        node = Node.where(region_id: @target_region.id).first
+        raise NoCapturableNode, "region #{@target_region.id} has no node to capture" if node.nil?
+        raise SelfCapture, "kingdom #{army.kingdom_id} already owns node #{node.id}" if node.owner_kingdom_id == army.kingdom_id
+        raise HomeHoardProtected, "node #{node.id} is a home-hoard reserved for its home kingdom" if foreign_home_hoard?(node, army.kingdom_id)
+        raise CatapultRequired, "capture requires a catapult (§9)" if army.composition["catapult"].to_i < 1
+      when "attack"
+        raise SelfAttack, "cannot raid your own home region" if @target_region.id == kingdom.home_region_id
+      end
+    end
+
+    def foreign_home_hoard?(node, kingdom_id)
+      return false unless node.is_home_hoard?
+      rightful = Kingdom.find_by(world_id: @target_region.world_id, home_region_id: @target_region.id)
+      rightful.nil? || rightful.id != kingdom_id
     end
   end
 end

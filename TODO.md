@@ -295,8 +295,7 @@ Implements `§9`, `§16.3` combat rules.
 Implements `§7`, `§16.5` wilderness garrisons, `§16.11 Ruins` claim flow.
 
 ### Services
-- [x] `Nodes::Capture.call(march_order:, node:)` — requires Catapult presence per `§9`; resolves vs garrison (one-time per `§16.5`); transfers ownership
-- [x] `Nodes::Attack.call(march_order:, node:)` — contested capture from another player; fights owner's region defenders via `Combat::Resolve` (or walks in if undefended)
+- [x] `Nodes::Capture.call(march_order:, node:)` — single service for taking a node: requires Catapult per `§9`; wilderness resolves vs garrison (one-time per `§16.5`), owned resolves vs the owner's region defenders via `Combat::Resolve` (or walks in if undefended); transfers ownership. Home-hoards reserved for their home kingdom (`HomeHoardProtected`). _(Originally split into `Nodes::Capture` + `Nodes::Attack`; merged.)_
 - [x] `Nodes::ProductionBonus.call(kingdom)` — sums flat bonuses (+120/+250/+500 per tier)
 - [x] `Ruins::Claim.call(march_order:, ruin:)` — resolve vs garrison; instant grant to winner home stockpile, respect Warehouse cap (excess lost per `§16.11` via `Stockpile::Apply`); ruin row preserved with `claimed_by_kingdom_id` + `claimed_at`; emits `dun.ruin.claimed`
 - [x] Home Hoard placement — already shipped in Phase 2 [`MapGeneration::PlaceSpawns#place_home_hoards`](app/services/map_generation/place_spawns.rb); Phase 7 added the §16.5 "weakest production type" assertion
@@ -414,7 +413,7 @@ Implements `§16.6` (round freeze, archive) and `§17.4` (stats, leaderboards, t
 - [x] `Wonders::Complete` delegates to `Rounds::End` (replaces Phase 9 stub `world.update!(status: "archived"...)`)
 - [x] `Wonders::Destroy` calls `Wreckers::Attribute` when `reason: "damage"` (skipped on voluntary cancel)
 - [x] `Combat::ApplyOutcome` increments raid stats for both player-vs-player kingdoms after every battle
-- [x] `Nodes::Capture`/`Nodes::Attack` call `Kingdoms::BumpPeakNodes` after ownership transfer
+- [x] `Nodes::Capture` calls `Kingdoms::BumpPeakNodes` after ownership transfer
 - [x] `Players::SetHandle` rejects handles in the 30-day `RetiredHandle` reservation window
 
 ### API endpoints

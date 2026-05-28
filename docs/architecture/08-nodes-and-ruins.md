@@ -12,8 +12,7 @@ Phase 6 ([07-combat.md](07-combat.md)) wired the `attack` intent in [`Marches::A
 |---|---|---|
 | Wilderness/ruin garrison combat | [`Combat::ResolveGarrison`](../../app/services/combat/resolve_garrison.rb) | reuses [`Combat::Round`](../../app/services/combat/round.rb); persists Battle with `defender_kingdom_id: nil` |
 | Garrison-side effects | [`Combat::ApplyGarrisonOutcome`](../../app/services/combat/apply_garrison_outcome.rb) | casualties + army position only — no loot, walls, defender row |
-| Wilderness node capture | [`Nodes::Capture`](../../app/services/nodes/capture.rb) | requires Catapult; on victory transfers ownership and clears garrison |
-| Contested node attack | [`Nodes::Attack`](../../app/services/nodes/attack.rb) | PvP combat against owner's armies at the region; walks in if undefended |
+| Node capture (wilderness **or** owned) | [`Nodes::Capture`](../../app/services/nodes/capture.rb) | one service: fights the NPC garrison (wilderness) or the owner's defending armies (owned; walks in if undefended); on victory transfers ownership. Home-hoards are reserved for their home kingdom |
 | Owned-node bonuses | [`Nodes::ProductionBonus`](../../app/services/nodes/production_bonus.rb) | per-resource sum of `base_rate` across owned nodes |
 | Ruin claim | [`Ruins::Claim`](../../app/services/ruins/claim.rb) | grants `ruin.cache` via `Stockpile::Apply` (warehouse-cap "excess lost") |
 
@@ -40,44 +39,43 @@ A wilderness battle emits `dun.garrison.defeated` (in addition to the usual `dun
 
 ## Node capture flow
 
+A single `capture` intent and a single service — [`Nodes::Capture`](../../app/services/nodes/capture.rb) — take a node regardless of who defends it. (Prior to this, owned nodes had a separate `Nodes::Attack` service; the two were merged because they produce the identical result, differing only by defender type.)
+
+Feasibility is gated **at dispatch** in [`Marches::Dispatch`](../../app/services/marches/dispatch.rb), so an impossible capture is rejected up front with a `422` and never sets out:
+
+| Code | Condition |
+|---|---|
+| `catapult_required` | army carries no Catapult (`catapult < 1`, §9) |
+| `no_capturable_node` | target region has no node |
+| `self_capture` | target node is already owned by the dispatching kingdom |
+| `home_hoard_protected` | target is an `is_home_hoard` node whose home kingdom isn't the dispatcher |
+
 ```
-army with catapult ─── march:capture ──► Marches::Arrive#handle_capture
+army with catapult ─── march:capture ──► Marches::Dispatch (feasibility gate, 422 on failure)
                                             │
                                             ▼
-                                  Node at target.region_id?
-                                       │            │
-                                     yes            no  ──► park home, emit dun.node.capture_aborted{reason:no_node}
-                                       │
-                                       ▼
-                        node.wilderness? ────yes───► Nodes::Capture ──► ResolveGarrison ──► transfer + clear garrison
-                                       │
-                                       no
-                                       │
-                                       ▼
-                                  Nodes::Attack
-                                       │
-                       ┌───────────────┴───────────────┐
-                  defenders at region                 no defenders
-                       │                                   │
-                       ▼                                   ▼
-              Combat::Resolve                     walk in, transfer ownership
-              (defender_kingdom: owner)              (no Battle row)
+                                  Marches::Arrive#handle_capture ──► Nodes::Capture
+                                            │
+                        node.wilderness? ────yes───► ResolveGarrison ──► transfer + clear garrison
+                                            │
+                                            no
+                                            ▼
+                            ┌───────────────┴───────────────┐
+                       defenders at region                no defenders
+                            │                                   │
+                            ▼                                   ▼
+                   Combat::Resolve                     walk in, transfer ownership
+                   (defender_kingdom: owner)              (no Battle row)
 ```
 
-[`Nodes::Capture`](../../app/services/nodes/capture.rb) handles wilderness nodes:
+[`Nodes::Capture`](../../app/services/nodes/capture.rb) re-checks the same preconditions (`SelfCapture`, `HomeHoardProtected`, `CatapultRequired`) as an in-transit backstop — state can change between dispatch and arrival — then branches:
 
-1. Validates **Catapult prerequisite** per §9 — without `catapult ≥ 1` it raises `Nodes::Capture::CatapultRequired`. The caller in [`Marches::Arrive`](../../app/services/marches/arrive.rb) rescues, parks the army `engaged`, and emits `dun.node.capture_aborted` with reason `"catapult_required"`.
-2. Runs the garrison fight.
-3. **On attacker victory**, transfers ownership: `node.owner_kingdom_id = army.kingdom_id`, `node.garrison = {}`. The cleared garrison is what makes "garrison defeat is one-time" per §16.5 — once defeated, no respawn.
-4. **On loss / rout**, the node is unchanged. The garrison row keeps its original composition: the next attacker faces the same fresh garrison, not a partially-attrited one. (One-time defeat triggers only on a *winning* attempt.)
+- **Wilderness node:** runs the garrison fight via [`Combat::ResolveGarrison`](../../app/services/combat/resolve_garrison.rb). **On attacker victory**, `node.owner_kingdom_id = army.kingdom_id`, `node.garrison = {}` — the cleared garrison is what makes "garrison defeat is one-time" (§16.5). **On loss / rout**, the node is unchanged; the next attacker faces the same fresh garrison.
+- **Owned node:** if defenders are parked at the region, run [`Combat::Resolve`](../../app/services/combat/resolve.rb) with the explicit `defender_kingdom:` kwarg (the owner is rarely homed there, so the resolver's default home-region lookup doesn't apply); if undefended, the attacker walks in and ownership transfers with no Battle row.
 
-[`Nodes::Attack`](../../app/services/nodes/attack.rb) handles already-owned nodes:
+A **home-hoard node is reserved for its home kingdom** — the kingdom whose `home_region_id` is the node's region. Any other kingdom is rejected (`HomeHoardProtected`) in every state: while the node is still wilderness at T0 *and* after the home kingdom owns it. It can never be seized; only the kingdom's stockpile is raidable (via the `attack` intent). The rightful owner is found with `Kingdom.find_by(world_id:, home_region_id: node.region_id)`; an unclaimed spawn slot (no such kingdom yet) locks the node for everyone until it is assigned.
 
-1. Same Catapult prerequisite.
-2. **If defenders are parked at the region**, run [`Combat::Resolve`](../../app/services/combat/resolve.rb) with the explicit `defender_kingdom:` kwarg — the owner is rarely homed at this region, so the resolver's default home-region lookup doesn't apply.
-3. **If the region is undefended**, the attacker walks in: ownership transfers immediately with no Battle row. This matches §9's "no respawn garrison" — once cleared and unopposed, the territory is unguarded.
-
-Both services emit `dun.node.captured` with `{world_id, region_id, node_id, kingdom_id, battle_id?}` on success. `battle_id` is `nil` for the walk-in case.
+On success the service emits `dun.node.captured` with `{world_id, region_id, node_id, kingdom_id, battle_id?}`. `battle_id` is `nil` for the walk-in case. When the arrival backstop fires, [`Marches::Arrive`](../../app/services/marches/arrive.rb) parks the army and emits `dun.node.capture_aborted` with the reason (`catapult_required`, `no_node`, `self_capture`, `home_hoard_protected`).
 
 ### Production bonus
 
@@ -111,7 +109,7 @@ counts.min_by { |_, c| [c, rng.rand] }.first
 
 Because home hoards are placed for spawns one-by-one and the only nodes that exist at that point are the *earlier* home hoards, each subsequent spawn's home hoard biases toward whichever resource is least-represented in its neighborhood. Across a typical multi-player map this surfaces as resource diversification: rare resources for a given spawn's neighborhood get filled in first.
 
-Home hoards inherit the standard-tier wilderness garrison (`{levy: 25, archer: 10, pikeman: 5}`). They are not owned at T0 — players must clear the garrison to take possession. This is the same one-time encounter every wilderness node has.
+Home hoards inherit the standard-tier wilderness garrison (`{levy: 25, archer: 10, pikeman: 5}`). They are not owned at T0 — the home kingdom must clear the garrison to take possession (the same one-time encounter every wilderness node has). Unlike a regular node, a home hoard is **reserved for its home kingdom**: no other kingdom can capture it while it's wilderness, and once owned it can never be seized — see the home-hoard protection rule under [Node capture flow](#node-capture-flow).
 
 ---
 
@@ -119,10 +117,10 @@ Home hoards inherit the standard-tier wilderness garrison (`{levy: 25, archer: 1
 
 | Trigger | Effect |
 |---|---|
-| `Marches::Arrive` for `capture` intent | dispatches to `Nodes::Capture` (wilderness) or `Nodes::Attack` (owned) |
+| `Marches::Arrive` for `capture` intent | dispatches to `Nodes::Capture` (handles wilderness garrison and owned-node PvP) |
 | `Marches::Arrive` for `claim_ruin` intent | dispatches to `Ruins::Claim` |
 | `Combat::ResolveGarrison` | persists Battle, emits `dun.garrison.defeated` |
-| `Nodes::Capture` / `Nodes::Attack` on win | updates Node ownership, emits `dun.node.captured` |
+| `Nodes::Capture` on win | updates Node ownership, emits `dun.node.captured` |
 | `Ruins::Claim` on win | grants cache via `Stockpile::Apply`, sets `claimed_*`, emits `dun.ruin.claimed` |
 
 All effects happen inside the same transaction as `Marches::Arrive` — a successful arrival commits the Battle row, the ownership transfer, and the army position together, or none of them.
@@ -132,7 +130,7 @@ All effects happen inside the same transaction as `Marches::Arrive` — a succes
 | Event | Payload | Fired by |
 |---|---|---|
 | `dun.garrison.defeated` | `world_id, region_id, battle_id, attacker_kingdom_id, outcome` | `Combat::ResolveGarrison` |
-| `dun.node.captured` | `world_id, region_id, node_id, kingdom_id, battle_id?` | `Nodes::Capture`, `Nodes::Attack` |
+| `dun.node.captured` | `world_id, region_id, node_id, kingdom_id, battle_id?` | `Nodes::Capture` |
 | `dun.node.capture_aborted` | `world_id, region_id, army_id, reason` | `Marches::Arrive#handle_capture` |
 | `dun.ruin.claimed` | `world_id, region_id, ruin_id, kingdom_id, battle_id, granted` | `Ruins::Claim` |
 | `dun.ruin.claim_aborted` | `world_id, region_id, army_id, reason` | `Marches::Arrive#handle_claim_ruin` |
@@ -144,5 +142,5 @@ Plus the inherited `dun.battle.applied` (every wilderness battle is also a Battl
 ## Open follow-ups
 
 - **Partial-attrition garrisons** — today a failed attempt leaves the wilderness garrison intact for the next attacker. The simplest reading of "garrison defeat is one-time" (§16.5) treats the encounter as a single boolean: cleared or not. If we ever want costly nibbling on a tough garrison, serialize per-attempt casualties back onto `node.garrison`.
-- **Owner-stocked defender garrison** — `Nodes::Attack` currently relies on the owner sending an army to defend a captured node. Phase 13 (fog/scouting) and a possible "permanent garrison" feature could let owners stock units directly on the node row.
+- **Owner-stocked defender garrison** — `Nodes::Capture`'s owned-node path currently relies on the owner sending an army to defend a captured node. Phase 13 (fog/scouting) and a possible "permanent garrison" feature could let owners stock units directly on the node row.
 - **Persistent world announcements** — `dun.ruin.claimed` is the v1 announcement surface. A broadcast/notification model can subscribe and persist these for player-visible activity feeds when that work lands.

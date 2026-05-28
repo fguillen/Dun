@@ -20,6 +20,16 @@ module Api
       render_error(code: "world_not_active", message: e.message, status: :unprocessable_entity)
     rescue ::Marches::Dispatch::InvalidIntent => e
       render_error(code: "invalid_intent", message: e.message, status: :unprocessable_entity)
+    rescue ::Marches::Dispatch::CatapultRequired => e
+      render_error(code: "catapult_required", message: e.message, status: :unprocessable_entity)
+    rescue ::Marches::Dispatch::NoCapturableNode => e
+      render_error(code: "no_capturable_node", message: e.message, status: :unprocessable_entity)
+    rescue ::Marches::Dispatch::SelfCapture => e
+      render_error(code: "self_capture", message: e.message, status: :unprocessable_entity)
+    rescue ::Marches::Dispatch::HomeHoardProtected => e
+      render_error(code: "home_hoard_protected", message: e.message, status: :unprocessable_entity)
+    rescue ::Marches::Dispatch::SelfAttack => e
+      render_error(code: "self_attack", message: e.message, status: :unprocessable_entity)
     rescue ::Marches::Plan::EmptyArmy => e
       render_error(code: "army_empty", message: e.message, status: :unprocessable_entity)
     rescue ::Marches::Plan::CrossWorld => e

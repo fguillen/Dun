@@ -167,6 +167,26 @@ module Api
       assert_equal "unreachable", response.parsed_body.dig("error", "code")
     end
 
+    test "POST march 422 catapult_required when capturing without a catapult" do
+      create(:node, region: @neighbor)
+      post "/v1/armies/#{@garrison.id}/march",
+        params: { target_region_id: @neighbor.id, intent: "capture" },
+        headers: auth_headers
+      assert_response :unprocessable_entity
+      assert_equal "catapult_required", response.parsed_body.dig("error", "code")
+    end
+
+    test "POST march 422 home_hoard_protected when capturing another kingdom's home-hoard" do
+      create(:kingdom, world: @kingdom.world, home_region: @neighbor)
+      create(:node, region: @neighbor, is_home_hoard: true)
+      @garrison.update!(composition: { "knight" => 5, "catapult" => 1 })
+      post "/v1/armies/#{@garrison.id}/march",
+        params: { target_region_id: @neighbor.id, intent: "capture" },
+        headers: auth_headers
+      assert_response :unprocessable_entity
+      assert_equal "home_hoard_protected", response.parsed_body.dig("error", "code")
+    end
+
     test "POST recall returns the new return MarchOrder" do
       ::Marches::Dispatch.call(army: @garrison, target_region: @neighbor, intent: "attack")
       post "/v1/armies/#{@garrison.id}/recall", headers: auth_headers

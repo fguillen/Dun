@@ -47,10 +47,16 @@ module Marches
       assert_equal @army.kingdom_id, node.owner_kingdom_id
     end
 
-    test "capture without a catapult parks engaged + fires aborted notification" do
+    # Dispatch normally rejects these up front; build the order via the factory to
+    # exercise the in-transit arrival backstop directly.
+    def capture_order_via_factory
+      create(:march_order, army: @army, origin_region: @home, target_region: @target,
+        intent: "capture", path: [ @home.id, @target.id ], arrives_at: 1.minute.ago)
+    end
+
+    test "capture without a catapult parks engaged + fires aborted notification (arrival backstop)" do
       create(:node, region: @target)
-      order = Dispatch.call(army: @army, target_region: @target, intent: "capture")
-      order.update!(arrives_at: 1.minute.ago)
+      order = capture_order_via_factory
 
       events = []
       ActiveSupport::Notifications.subscribed(->(_, _, _, _, p) { events << p }, "dun.node.capture_aborted") do
@@ -63,10 +69,9 @@ module Marches
       assert_equal 0, Battle.count
     end
 
-    test "capture on a region with no node parks home and fires aborted" do
+    test "capture on a region with no node parks home and fires aborted (arrival backstop)" do
       events = []
-      order = Dispatch.call(army: @army, target_region: @target, intent: "capture")
-      order.update!(arrives_at: 1.minute.ago)
+      order = capture_order_via_factory
 
       ActiveSupport::Notifications.subscribed(->(_, _, _, _, p) { events << p }, "dun.node.capture_aborted") do
         Arrive.call(march_order: order)

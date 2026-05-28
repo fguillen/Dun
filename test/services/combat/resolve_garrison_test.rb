@@ -11,10 +11,13 @@ module Combat
       @kingdom = create(:kingdom, :with_buildings, world: @world, home_region: @home)
     end
 
+    # Build the arrival state directly (army in flight + a resolved-time order)
+    # so the garrison resolver is exercised without the capture-feasibility gate
+    # in Marches::Dispatch (which would reject a node-less target up front).
     def dispatch(army, target, intent: "capture")
-      order = Marches::Dispatch.call(army: army, target_region: target, intent: intent)
-      order.update!(arrives_at: 1.minute.ago)
-      order
+      army.update!(status: "marching")
+      create(:march_order, army: army, origin_region: army.location_region, target_region: target,
+        intent: intent, path: [ army.location_region_id, target.id ], arrives_at: 1.minute.ago)
     end
 
     test "persists a Battle row with defender_kingdom_id: nil and two participants" do
