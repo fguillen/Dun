@@ -84,6 +84,39 @@ module Api
       assert_equal kingdom.player_profile.handle, regions[owned_region.id]["owner_handle"]
     end
 
+    test "GET /v1/worlds/:id/map lists visible armies per region with composition and mine flag" do
+      world = create(:world, :grace, server: @server)
+      region_a = create(:region, world: world)
+      region_b = create(:region, world: world)
+
+      mine = create(:kingdom, world: world, home_region: region_a,
+        player_profile: create(:player_profile, server: @server, player: @player))
+      theirs = create(:kingdom, world: world, home_region: region_b,
+        player_profile: create(:player_profile, server: @server))
+
+      my_army = create(:army, kingdom: mine, location_region: region_a, name: "Mine",
+        composition: { "levy" => 25, "archer" => 10 })
+      their_army = create(:army, :marching, kingdom: theirs, location_region: region_a, name: "Theirs",
+        composition: { "knight" => 3 })
+
+      get "/v1/worlds/#{world.id}/map", headers: auth_headers
+      assert_response :success
+      regions = response.parsed_body["regions"].index_by { |r| r["id"] }
+
+      armies = regions[region_a.id]["visible_armies"].index_by { |a| a["army_id"] }
+      assert_equal 2, armies.size
+
+      assert_equal true, armies[my_army.id]["mine"]
+      assert_equal "home", armies[my_army.id]["status"]
+      assert_equal({ "levy" => 25, "archer" => 10 }, armies[my_army.id]["composition"])
+      assert_equal mine.player_profile.handle, armies[my_army.id]["owner_handle"]
+
+      assert_equal false, armies[their_army.id]["mine"]
+      assert_equal "marching", armies[their_army.id]["status"]
+
+      assert_equal [], regions[region_b.id]["visible_armies"]
+    end
+
     test "GET /v1/worlds/:id/regions/:id returns nodes, ruin, adjacency" do
       grace_world = create(:world, :grace, server: @server, seed: "0000000000002f35", min_players: 12)
       MapGeneration::Generate.call(world: grace_world, players_count: 12)

@@ -55,6 +55,9 @@ Rails.application.routes.draw do
             get :catalog
           end
         end
+        resources :marches, only: [], path: "march" do
+          collection { get :preview }
+        end
         resources :buildings,       only: %i[index]
         resources :armies,          only: %i[index]
         resources :battles,         only: %i[index]
