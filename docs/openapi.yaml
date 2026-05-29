@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: dun HTTP API
-  version: "1.6.0"
+  version: "1.6.1"
   description: |
     JSON API for the `dun` backend. The CLI gem and any future integration
     consume only this surface.
@@ -3455,11 +3455,11 @@ components:
 
     BattleParticipant:
       type: object
-      required: [id, battle_id, kingdom_id, side, starting_composition, ending_composition, casualties]
+      required: [id, battle_id, side, starting_composition, ending_composition, casualties]
       properties:
         id: { type: string }
         battle_id: { type: string }
-        kingdom_id: { type: string }
+        kingdom_id: { type: string, nullable: true }
         army_id: { type: string, nullable: true }
         side: { type: string, enum: [attacker, defender] }
         starting_composition: { $ref: "#/components/schemas/Composition" }
