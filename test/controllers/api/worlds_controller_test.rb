@@ -84,6 +84,24 @@ module Api
       assert_equal kingdom.player_profile.handle, regions[owned_region.id]["owner_handle"]
     end
 
+    test "GET /v1/worlds/:id/map shows region ownership and node owner for a captured non-home-hoard node" do
+      world = create(:world, :grace, server: @server)
+      region = create(:region, world: world)
+      kingdom = create(:kingdom, world: world)
+      node = create(:node, region: region, resource: "iron", owner_kingdom_id: kingdom.id)
+
+      get "/v1/worlds/#{world.id}/map", headers: auth_headers
+      assert_response :success
+      region_body = response.parsed_body["regions"].find { |r| r["id"] == region.id }
+
+      assert_equal kingdom.id, region_body["owner_kingdom_id"]
+      assert_equal kingdom.player_profile.handle, region_body["owner_handle"]
+
+      node_body = region_body["nodes"].find { |n| n["id"] == node.id }
+      assert_equal kingdom.id, node_body["owner_kingdom_id"]
+      assert_equal kingdom.player_profile.handle, node_body["owner_handle"]
+    end
+
     test "GET /v1/worlds/:id/map lists visible armies per region with composition and mine flag" do
       world = create(:world, :grace, server: @server)
       region_a = create(:region, world: world)
@@ -151,6 +169,20 @@ module Api
       assert_equal kingdom.player_profile.handle, home["owner_handle"]
       assert_nil wild["owner_kingdom_id"]
       assert_nil wild["owner_handle"]
+    end
+
+    test "GET /v1/worlds/:id/regions/:id reflects a captured non-home-hoard node as the region owner" do
+      world = create(:world, :grace, server: @server)
+      region = create(:region, world: world)
+      kingdom = create(:kingdom, world: world)
+      create(:node, region: region, resource: "iron", owner_kingdom_id: kingdom.id)
+
+      get "/v1/worlds/#{world.id}/regions/#{region.id}", headers: auth_headers
+      assert_response :success
+      body = response.parsed_body
+
+      assert_equal kingdom.id, body["owner_kingdom_id"]
+      assert_equal kingdom.player_profile.handle, body["owner_handle"]
     end
 
     test "GET /v1/worlds/:id/ruins lists ruins on the world" do

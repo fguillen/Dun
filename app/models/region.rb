@@ -18,6 +18,19 @@ class Region < ApplicationRecord
   validates :name, presence: true, uniqueness: { scope: :world_id }
   validates :terrain, inclusion: { in: TERRAINS }
 
+  # Derived region ownership (no owner column on regions). A region with a
+  # home-hoard node is owned by that node's owner — preserving home-region
+  # semantics, including nil while the hoard is still wilderness. Otherwise the
+  # region follows its captured node(s): the sole owner across owned nodes, or
+  # nil when none are owned or they disagree (contested).
+  def owner_kingdom_id
+    hoard = nodes.find(&:is_home_hoard)
+    return hoard.owner_kingdom_id if hoard
+
+    owners = nodes.filter_map(&:owner_kingdom_id).uniq
+    owners.first if owners.one?
+  end
+
   def adjacent_regions
     Region
       .where(id: adjacencies_as_a.select(:region_b_id))

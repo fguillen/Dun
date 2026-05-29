@@ -34,8 +34,8 @@ module Api
       end
 
       def serialize(region)
-        handle_map = Kingdom.handles_for(region.nodes.map(&:owner_kingdom_id))
-        owner_id = region.nodes.find { |n| n.is_home_hoard }&.owner_kingdom_id
+        handle_map = Kingdom.handles_for(region.nodes.map(&:owner_kingdom_id) + [ region.owner_kingdom_id ])
+        owner_id = region.owner_kingdom_id
         {
           id: region.id,
           name: region.name,

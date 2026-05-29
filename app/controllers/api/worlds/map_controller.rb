@@ -5,7 +5,8 @@ module Api
         regions = world.regions.includes(:nodes, :ruin).order(:name)
         adjacency = build_adjacency(regions)
         my_spawn_id = my_kingdoms_spawn_id
-        handle_map = Kingdom.handles_for(regions.map { |r| region_owner_id(r) })
+        owner_ids = regions.flat_map { |r| [ r.owner_kingdom_id, *r.nodes.map(&:owner_kingdom_id) ] }
+        handle_map = Kingdom.handles_for(owner_ids)
         armies_by_region = armies_by_region(regions)
 
         render json: {
@@ -58,14 +59,8 @@ module Api
             .group_by(&:location_region_id)
       end
 
-      # A region's owner is the kingdom holding its home-hoard node (same
-      # derivation as RegionsController#serialize).
-      def region_owner_id(region)
-        region.nodes.find { |n| n.is_home_hoard }&.owner_kingdom_id
-      end
-
       def serialize(region, adjacency, my_spawn_id, handle_map, armies_by_region)
-        owner_id = region_owner_id(region)
+        owner_id = region.owner_kingdom_id
         {
           id: region.id,
           name: region.name,
@@ -77,7 +72,16 @@ module Api
           owner_kingdom_id: owner_id,
           owner_handle: owner_id && handle_map[owner_id],
           adjacency: adjacency[region.id].sort,
-          nodes: region.nodes.map { |n| { id: n.id, resource: n.resource, tier: n.tier, is_home_hoard: n.is_home_hoard } },
+          nodes: region.nodes.map { |n|
+            {
+              id: n.id,
+              resource: n.resource,
+              tier: n.tier,
+              is_home_hoard: n.is_home_hoard,
+              owner_kingdom_id: n.owner_kingdom_id,
+              owner_handle: n.owner_kingdom_id && handle_map[n.owner_kingdom_id]
+            }
+          },
           ruin: region.ruin && { id: region.ruin.id, tier: region.ruin.tier, claimed: region.ruin.claimed? },
           visible_armies: (armies_by_region[region.id] || []).map { |a| serialize_army(a) }
         }
